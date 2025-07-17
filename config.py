@@ -58,14 +58,18 @@ def get_secret(key, default="", section=None):
 class Config:
     """Configuración principal de la aplicación"""
     
-    # Base de datos - Soporte para Supabase y PostgreSQL local
+    # Supabase Configuration
+    SUPABASE_URL = get_secret("url", "", "supabase")
+    SUPABASE_KEY = get_secret("anon_key", "", "supabase")
+    
+    # Base de datos - Mantener para compatibilidad con psycopg2 si es necesario
     DB_HOST = get_secret("host", "localhost", "database")
     DB_PORT = get_secret("port", "5432", "database")
     DB_NAME = get_secret("name", "profit_coach", "database")
     DB_USER = get_secret("user", "postgres", "database")
     DB_PASSWORD = get_secret("password", "", "database")
     
-    # URL de conexión directa (para Supabase)
+    # URL de conexión directa (para psycopg2 fallback)
     DATABASE_URL = get_secret("url", "", "database")
     
     # SSL para conexiones en la nube (Supabase requiere SSL)
