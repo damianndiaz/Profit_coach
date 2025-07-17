@@ -45,30 +45,30 @@ class Config:
     """Configuración principal de la aplicación"""
     
     # Base de datos - Soporte para Supabase y PostgreSQL local
-    DB_HOST = get_secret("host", "localhost", "database")
-    DB_PORT = get_secret("port", "5432", "database")
-    DB_NAME = get_secret("name", "profit_coach", "database")
-    DB_USER = get_secret("user", "postgres", "database")
-    DB_PASSWORD = get_secret("password", "", "database")
+    DB_HOST = get_secret("DB_HOST", "localhost", "database")
+    DB_PORT = get_secret("DB_PORT", "5432", "database")
+    DB_NAME = get_secret("DB_NAME", "profit_coach", "database")
+    DB_USER = get_secret("DB_USER", "postgres", "database")
+    DB_PASSWORD = get_secret("DB_PASSWORD", "", "database")
     
     # URL de conexión directa (para Supabase)
-    DATABASE_URL = get_secret("url", "", "database")
+    DATABASE_URL = get_secret("DATABASE_URL", "", "database")
     
     # SSL para conexiones en la nube (Supabase requiere SSL)
     DB_SSL_MODE = get_secret("DB_SSL_MODE", "prefer", "database")
     
     # OpenAI
-    OPENAI_API_KEY = get_secret("api_key", "", "openai")
-    OPENAI_ASSISTANT_ID = get_secret("assistant_id", "", "openai")
+    OPENAI_API_KEY = get_secret("OPENAI_API_KEY", "", "openai")
+    OPENAI_ASSISTANT_ID = get_secret("OPENAI_ASSISTANT_ID", "", "openai")
     
     # Email Configuration
-    EMAIL_HOST = get_secret("host", "smtp.gmail.com", "email")
-    EMAIL_PORT = int(get_secret("port", "587", "email"))
-    EMAIL_USE_TLS = str(get_secret("use_tls", "True", "email")).lower() == "true"
-    EMAIL_USERNAME = get_secret("username", "", "email")
-    EMAIL_PASSWORD = get_secret("password", "", "email")
-    EMAIL_FROM_NAME = get_secret("from_name", "ProFit Coach", "email")
-    EMAIL_FROM_EMAIL = get_secret("from_email", "", "email")
+    EMAIL_HOST = get_secret("EMAIL_HOST", "smtp.gmail.com", "email")
+    EMAIL_PORT = int(get_secret("EMAIL_PORT", "587", "email"))
+    EMAIL_USE_TLS = str(get_secret("EMAIL_USE_TLS", "True", "email")).lower() == "true"
+    EMAIL_USERNAME = get_secret("EMAIL_USERNAME", "", "email")
+    EMAIL_PASSWORD = get_secret("EMAIL_PASSWORD", "", "email")
+    EMAIL_FROM_NAME = get_secret("EMAIL_FROM_NAME", "ProFit Coach", "email")
+    EMAIL_FROM_EMAIL = get_secret("EMAIL_FROM_EMAIL", "", "email")
     
     # Configuración de la aplicación
     MAX_ATHLETES_PER_USER = int(get_secret("MAX_ATHLETES_PER_USER", "50", "app"))

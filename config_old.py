@@ -2,8 +2,8 @@
 Configuración de ProFit Coach
 """
 import os
-import logging
 from dotenv import load_dotenv
+import logging
 
 load_dotenv()
 
@@ -11,12 +11,12 @@ load_dotenv()
 try:
     import streamlit as st
     IS_STREAMLIT_CLOUD = hasattr(st, 'secrets') and len(st.secrets) > 0
-    logging.info(f"🔧 Streamlit Cloud detectado: {IS_STREAMLIT_CLOUD}")
+    logging.info(f"Streamlit Cloud detectado: {IS_STREAMLIT_CLOUD}")
     if IS_STREAMLIT_CLOUD:
-        logging.info(f"🔑 Secrets disponibles: {list(st.secrets.keys())}")
+        logging.info(f"Secrets disponibles: {list(st.secrets.keys())}")
 except Exception as e:
     IS_STREAMLIT_CLOUD = False
-    logging.warning(f"⚠️ Error detectando Streamlit Cloud: {e}")
+    logging.warning(f"Error detectando Streamlit Cloud: {e}")
 
 def get_secret(key, default="", section=None):
     """Obtiene secretos de Streamlit Cloud o variables de entorno"""
@@ -24,51 +24,48 @@ def get_secret(key, default="", section=None):
         try:
             if section:
                 value = st.secrets[section].get(key, default)
-                masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret']) else value
-                logging.info(f"🔑 Secret [{section}][{key}]: {masked_value}")
+                logging.info(f"Secret obtenido [{section}][{key}]: {'***' if 'password' in key.lower() or 'key' in key.lower() else value}")
                 return value
             else:
                 value = st.secrets.get(key, default)
-                masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret']) else value
-                logging.info(f"🔑 Secret [{key}]: {masked_value}")
+                logging.info(f"Secret obtenido [{key}]: {'***' if 'password' in key.lower() or 'key' in key.lower() else value}")
                 return value
         except (KeyError, AttributeError) as e:
-            logging.warning(f"❌ Error obteniendo secret {section}.{key}: {e}")
+            logging.warning(f"Error obteniendo secret {section}.{key}: {e}")
             return default
     else:
         value = os.getenv(key, default)
-        masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret']) else value
-        logging.info(f"🌍 Env var [{key}]: {masked_value}")
+        logging.info(f"Env var obtenida [{key}]: {'***' if 'password' in key.lower() or 'key' in key.lower() else value}")
         return value
 
 class Config:
     """Configuración principal de la aplicación"""
     
     # Base de datos - Soporte para Supabase y PostgreSQL local
-    DB_HOST = get_secret("host", "localhost", "database")
-    DB_PORT = get_secret("port", "5432", "database")
-    DB_NAME = get_secret("name", "profit_coach", "database")
-    DB_USER = get_secret("user", "postgres", "database")
-    DB_PASSWORD = get_secret("password", "", "database")
+    DB_HOST = get_secret("DB_HOST", "localhost", "database")
+    DB_PORT = get_secret("DB_PORT", "5432", "database")
+    DB_NAME = get_secret("DB_NAME", "profit_coach", "database")
+    DB_USER = get_secret("DB_USER", "postgres", "database")
+    DB_PASSWORD = get_secret("DB_PASSWORD", "", "database")
     
     # URL de conexión directa (para Supabase)
-    DATABASE_URL = get_secret("url", "", "database")
+    DATABASE_URL = get_secret("DATABASE_URL", "", "database")
     
     # SSL para conexiones en la nube (Supabase requiere SSL)
     DB_SSL_MODE = get_secret("DB_SSL_MODE", "prefer", "database")
     
     # OpenAI
-    OPENAI_API_KEY = get_secret("api_key", "", "openai")
-    OPENAI_ASSISTANT_ID = get_secret("assistant_id", "", "openai")
+    OPENAI_API_KEY = get_secret("OPENAI_API_KEY", "", "openai")
+    OPENAI_ASSISTANT_ID = get_secret("OPENAI_ASSISTANT_ID", "", "openai")
     
     # Email Configuration
-    EMAIL_HOST = get_secret("host", "smtp.gmail.com", "email")
-    EMAIL_PORT = int(get_secret("port", "587", "email"))
-    EMAIL_USE_TLS = str(get_secret("use_tls", "True", "email")).lower() == "true"
-    EMAIL_USERNAME = get_secret("username", "", "email")
-    EMAIL_PASSWORD = get_secret("password", "", "email")
-    EMAIL_FROM_NAME = get_secret("from_name", "ProFit Coach", "email")
-    EMAIL_FROM_EMAIL = get_secret("from_email", "", "email")
+    EMAIL_HOST = get_secret("EMAIL_HOST", "smtp.gmail.com", "email")
+    EMAIL_PORT = int(get_secret("EMAIL_PORT", "587", "email"))
+    EMAIL_USE_TLS = str(get_secret("EMAIL_USE_TLS", "True", "email")).lower() == "true"
+    EMAIL_USERNAME = get_secret("EMAIL_USERNAME", "", "email")
+    EMAIL_PASSWORD = get_secret("EMAIL_PASSWORD", "", "email")
+    EMAIL_FROM_NAME = get_secret("EMAIL_FROM_NAME", "ProFit Coach", "email")
+    EMAIL_FROM_EMAIL = get_secret("EMAIL_FROM_EMAIL", "", "email")
     
     # Configuración de la aplicación
     MAX_ATHLETES_PER_USER = int(get_secret("MAX_ATHLETES_PER_USER", "50", "app"))
@@ -91,13 +88,6 @@ class Config:
     @classmethod
     def validate_config(cls):
         """Valida la configuración requerida"""
-        logging.info("🔍 Validando configuración...")
-        
-        # Verificar si tenemos URL de conexión o parámetros individuales
-        if cls.DATABASE_URL:
-            logging.info("✅ Usando DATABASE_URL para conexión")
-            return []
-        
         required_vars = [
             ("DB_HOST", cls.DB_HOST),
             ("DB_NAME", cls.DB_NAME),
@@ -111,7 +101,6 @@ class Config:
                 missing_vars.append(var_name)
         
         if missing_vars:
-            logging.error(f"❌ Variables requeridas no configuradas: {', '.join(missing_vars)}")
             raise ValueError(f"Variables de entorno requeridas no configuradas: {', '.join(missing_vars)}")
         
         # Validaciones opcionales pero recomendadas
@@ -120,9 +109,6 @@ class Config:
             warnings.append("OPENAI_API_KEY no configurada - funcionalidad de chat limitada")
         if not cls.OPENAI_ASSISTANT_ID:
             warnings.append("OPENAI_ASSISTANT_ID no configurada - funcionalidad de chat limitada")
-        
-        for warning in warnings:
-            logging.warning(f"⚠️ {warning}")
         
         return warnings
 
@@ -143,8 +129,7 @@ class ProductionConfig(Config):
 
 def get_config():
     """Obtiene la configuración según el entorno"""
-    env = get_secret("ENVIRONMENT", "development", "app")
-    logging.info(f"🌍 Entorno detectado: {env}")
+    env = os.getenv("ENVIRONMENT", "development").lower()
     
     if env == "production":
         return ProductionConfig()
@@ -153,11 +138,3 @@ def get_config():
 
 # Instancia global de configuración
 config = get_config()
-
-# Validar configuración al cargar
-try:
-    config.validate_config()
-    logging.info("✅ Configuración validada correctamente")
-except Exception as e:
-    logging.error(f"❌ Error en configuración: {e}")
-    raise
