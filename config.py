@@ -62,18 +62,18 @@ class Config:
     SUPABASE_URL = get_secret("url", "", "supabase")
     SUPABASE_KEY = get_secret("anon_key", "", "supabase")
     
-    # Base de datos - Mantener para compatibilidad con psycopg2 si es necesario
-    DB_HOST = get_secret("host", "localhost", "database")
+    # Base de datos - Usar Supabase como default
+    DB_HOST = get_secret("host", "db.jnporlqgtyoimcoqjuv.supabase.co", "database")
     DB_PORT = get_secret("port", "5432", "database")
-    DB_NAME = get_secret("name", "profit_coach", "database")
+    DB_NAME = get_secret("name", "postgres", "database")
     DB_USER = get_secret("user", "postgres", "database")
-    DB_PASSWORD = get_secret("password", "", "database")
+    DB_PASSWORD = get_secret("password", "Ramiro2403", "database")
     
-    # URL de conexión directa (para psycopg2 fallback)
-    DATABASE_URL = get_secret("url", "", "database")
+    # URL de conexión directa (para psycopg2)
+    DATABASE_URL = get_secret("url", "postgresql://postgres:Ramiro2403@db.jnporlqgtyoimcoqjuv.supabase.co:5432/postgres", "database")
     
     # SSL para conexiones en la nube (Supabase requiere SSL)
-    DB_SSL_MODE = get_secret("DB_SSL_MODE", "prefer", "database")
+    DB_SSL_MODE = get_secret("ssl_mode", "require", "database")
     
     # OpenAI
     OPENAI_API_KEY = get_secret("api_key", "", "openai")
