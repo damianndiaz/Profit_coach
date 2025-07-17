@@ -63,14 +63,14 @@ class Config:
     SUPABASE_KEY = get_secret("anon_key", "", "supabase")
     
     # Base de datos - Usar Supabase como default  
-    DB_HOST = get_secret("host", "db.jnporlqgtyqoimcoqjuv.supabase.co", "database")
+    DB_HOST = get_secret("host", "db.jnporlogtyoiimcoqjuv.supabase.co", "database")
     DB_PORT = get_secret("port", "5432", "database")
     DB_NAME = get_secret("name", "postgres", "database")
     DB_USER = get_secret("user", "postgres", "database")
     DB_PASSWORD = get_secret("password", "Ramiro2403", "database")
     
     # URL de conexión directa (para psycopg2)
-    DATABASE_URL = get_secret("url", "postgresql://postgres:Ramiro2403@db.jnporlqgtyqoimcoqjuv.supabase.co:5432/postgres", "database")
+    DATABASE_URL = get_secret("url", "postgresql://postgres:Ramiro2403@db.jnporlogtyoiimcoqjuv.supabase.co:5432/postgres", "database")
     
     # SSL para conexiones en la nube (Supabase requiere SSL)
     DB_SSL_MODE = get_secret("ssl_mode", "require", "database")
