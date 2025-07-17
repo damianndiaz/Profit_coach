@@ -2,6 +2,7 @@
 Configuración de ProFit Coach
 """
 import os
+import logging
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -9,22 +10,36 @@ load_dotenv()
 # Detectar si estamos en Streamlit Cloud
 try:
     import streamlit as st
-    IS_STREAMLIT_CLOUD = hasattr(st, 'secrets') and st.secrets
-except:
+    IS_STREAMLIT_CLOUD = hasattr(st, 'secrets') and len(st.secrets) > 0
+    logging.info(f"🔧 Streamlit Cloud detectado: {IS_STREAMLIT_CLOUD}")
+    if IS_STREAMLIT_CLOUD:
+        logging.info(f"🔑 Secrets disponibles: {list(st.secrets.keys())}")
+except Exception as e:
     IS_STREAMLIT_CLOUD = False
+    logging.warning(f"⚠️ Error detectando Streamlit Cloud: {e}")
 
 def get_secret(key, default="", section=None):
     """Obtiene secretos de Streamlit Cloud o variables de entorno"""
     if IS_STREAMLIT_CLOUD:
         try:
             if section:
-                return st.secrets[section][key]
+                value = st.secrets[section].get(key, default)
+                masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret']) else value
+                logging.info(f"🔑 Secret [{section}][{key}]: {masked_value}")
+                return value
             else:
-                return st.secrets.get(key, default)
-        except:
+                value = st.secrets.get(key, default)
+                masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret']) else value
+                logging.info(f"🔑 Secret [{key}]: {masked_value}")
+                return value
+        except (KeyError, AttributeError) as e:
+            logging.warning(f"❌ Error obteniendo secret {section}.{key}: {e}")
             return default
     else:
-        return os.getenv(key, default)
+        value = os.getenv(key, default)
+        masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret']) else value
+        logging.info(f"🌍 Env var [{key}]: {masked_value}")
+        return value
 
 class Config:
     """Configuración principal de la aplicación"""
@@ -76,6 +91,13 @@ class Config:
     @classmethod
     def validate_config(cls):
         """Valida la configuración requerida"""
+        logging.info("🔍 Validando configuración...")
+        
+        # Verificar si tenemos URL de conexión o parámetros individuales
+        if cls.DATABASE_URL:
+            logging.info("✅ Usando DATABASE_URL para conexión")
+            return []
+        
         required_vars = [
             ("DB_HOST", cls.DB_HOST),
             ("DB_NAME", cls.DB_NAME),
@@ -89,6 +111,7 @@ class Config:
                 missing_vars.append(var_name)
         
         if missing_vars:
+            logging.error(f"❌ Variables requeridas no configuradas: {', '.join(missing_vars)}")
             raise ValueError(f"Variables de entorno requeridas no configuradas: {', '.join(missing_vars)}")
         
         # Validaciones opcionales pero recomendadas
@@ -97,6 +120,9 @@ class Config:
             warnings.append("OPENAI_API_KEY no configurada - funcionalidad de chat limitada")
         if not cls.OPENAI_ASSISTANT_ID:
             warnings.append("OPENAI_ASSISTANT_ID no configurada - funcionalidad de chat limitada")
+        
+        for warning in warnings:
+            logging.warning(f"⚠️ {warning}")
         
         return warnings
 
@@ -117,7 +143,8 @@ class ProductionConfig(Config):
 
 def get_config():
     """Obtiene la configuración según el entorno"""
-    env = os.getenv("ENVIRONMENT", "development").lower()
+    env = get_secret("ENVIRONMENT", "development", "app")
+    logging.info(f"🌍 Entorno detectado: {env}")
     
     if env == "production":
         return ProductionConfig()
@@ -126,3 +153,11 @@ def get_config():
 
 # Instancia global de configuración
 config = get_config()
+
+# Validar configuración al cargar
+try:
+    config.validate_config()
+    logging.info("✅ Configuración validada correctamente")
+except Exception as e:
+    logging.error(f"❌ Error en configuración: {e}")
+    raise
