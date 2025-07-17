@@ -18,15 +18,10 @@ if not logging.getLogger().handlers:
 try:
     import streamlit as st
     IS_STREAMLIT_CLOUD = hasattr(st, 'secrets') and len(st.secrets) > 0
-    print(f"🔧 Streamlit Cloud detectado: {IS_STREAMLIT_CLOUD}")
-    logging.info(f"🔧 Streamlit Cloud detectado: {IS_STREAMLIT_CLOUD}")
-    if IS_STREAMLIT_CLOUD:
-        print(f"🔑 Secrets disponibles: {list(st.secrets.keys())}")
-        logging.info(f"🔑 Secrets disponibles: {list(st.secrets.keys())}")
+    logging.info(f"🔧 Entorno: {'Cloud' if IS_STREAMLIT_CLOUD else 'Local'}")
 except Exception as e:
     IS_STREAMLIT_CLOUD = False
-    print(f"⚠️ Error detectando Streamlit Cloud: {e}")
-    logging.warning(f"⚠️ Error detectando Streamlit Cloud: {e}")
+    logging.warning(f"⚠️ Error detectando entorno: entorno local")
 
 def get_secret(key, default="", section=None):
     """Obtiene secretos de Streamlit Cloud o variables de entorno"""
@@ -34,25 +29,25 @@ def get_secret(key, default="", section=None):
         try:
             if section:
                 value = st.secrets[section].get(key, default)
-                masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret']) else value
-                print(f"🔑 Secret [{section}][{key}]: {masked_value}")
-                logging.info(f"🔑 Secret [{section}][{key}]: {masked_value}")
+                # Solo logear en desarrollo, NUNCA en producción
+                if not IS_STREAMLIT_CLOUD:
+                    masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret', 'url', 'host', 'id']) else value
+                    logging.debug(f"🔑 Secret [{section}][{key}]: {masked_value}")
                 return value
             else:
                 value = st.secrets.get(key, default)
-                masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret']) else value
-                print(f"🔑 Secret [{key}]: {masked_value}")
-                logging.info(f"🔑 Secret [{key}]: {masked_value}")
+                if not IS_STREAMLIT_CLOUD:
+                    masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret', 'url', 'host', 'id']) else value
+                    logging.debug(f"🔑 Secret [{key}]: {masked_value}")
                 return value
         except (KeyError, AttributeError) as e:
-            print(f"❌ Error obteniendo secret {section}.{key}: {e}")
-            logging.warning(f"❌ Error obteniendo secret {section}.{key}: {e}")
+            logging.warning(f"❌ Error obteniendo secret {section}.{key}")
             return default
     else:
         value = os.getenv(key, default)
-        masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret']) else value
-        print(f"🌍 Env var [{key}]: {masked_value}")
-        logging.info(f"🌍 Env var [{key}]: {masked_value}")
+        # Solo en desarrollo local
+        masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret', 'url', 'host', 'id']) else value
+        logging.debug(f"🌍 Env var [{key}]: {masked_value}")
         return value
 
 class Config:
@@ -85,22 +80,22 @@ class Config:
     EMAIL_FROM_EMAIL = get_secret("from_email", "", "email")
     
     # Configuración de la aplicación
-    MAX_ATHLETES_PER_USER = int(get_secret("MAX_ATHLETES_PER_USER", "50", "app"))
-    MAX_MESSAGE_LENGTH = int(get_secret("MAX_MESSAGE_LENGTH", "2000", "app"))
-    CHAT_HISTORY_LIMIT = int(get_secret("CHAT_HISTORY_LIMIT", "50", "app"))
-    SESSION_TIMEOUT_DAYS = int(get_secret("SESSION_TIMEOUT_DAYS", "30", "app"))
+    MAX_ATHLETES_PER_USER = int(get_secret("MAX_ATHLETES_PER_USER", "50", "app") or "50")
+    MAX_MESSAGE_LENGTH = int(get_secret("MAX_MESSAGE_LENGTH", "2000", "app") or "2000")
+    CHAT_HISTORY_LIMIT = int(get_secret("CHAT_HISTORY_LIMIT", "50", "app") or "50")
+    SESSION_TIMEOUT_DAYS = int(get_secret("SESSION_TIMEOUT_DAYS", "30", "app") or "30")
     
     # Configuración de logging
-    LOG_LEVEL = get_secret("LOG_LEVEL", "INFO", "app")
-    LOG_FILE = get_secret("LOG_FILE", "profit_coach.log", "app")
+    LOG_LEVEL = get_secret("LOG_LEVEL", "WARNING", "app") or "WARNING"  # Menos verbose en producción
+    LOG_FILE = get_secret("LOG_FILE", "profit_coach.log", "app") or "profit_coach.log"
     
     # Configuración de conexiones
-    DB_POOL_MIN_CONN = int(get_secret("DB_POOL_MIN_CONN", "1", "app"))
-    DB_POOL_MAX_CONN = int(get_secret("DB_POOL_MAX_CONN", "20", "app"))
+    DB_POOL_MIN_CONN = int(get_secret("DB_POOL_MIN_CONN", "1", "app") or "1")
+    DB_POOL_MAX_CONN = int(get_secret("DB_POOL_MAX_CONN", "20", "app") or "20")
     
     # Timeouts
-    OPENAI_TIMEOUT = int(get_secret("OPENAI_TIMEOUT", "30", "app"))
-    DB_TIMEOUT = int(get_secret("DB_TIMEOUT", "10", "app"))
+    OPENAI_TIMEOUT = int(get_secret("OPENAI_TIMEOUT", "30", "app") or "30")
+    DB_TIMEOUT = int(get_secret("DB_TIMEOUT", "10", "app") or "10")
     
     @classmethod
     def validate_config(cls):
@@ -157,13 +152,13 @@ class ProductionConfig(Config):
 
 def get_config():
     """Obtiene la configuración según el entorno"""
-    env = get_secret("ENVIRONMENT", "development", "app")
+    env = get_secret("ENVIRONMENT", "production", "app") or "production"  # Default a producción para seguridad
     logging.info(f"🌍 Entorno detectado: {env}")
     
-    if env == "production":
-        return ProductionConfig()
-    else:
+    if env == "development":
         return DevelopmentConfig()
+    else:
+        return ProductionConfig()
 
 # Instancia global de configuración
 config = get_config()
