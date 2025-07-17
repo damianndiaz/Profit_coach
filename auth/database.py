@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from psycopg2 import pool
 from contextlib import contextmanager
 from urllib.parse import urlparse
+from config import config
 
 load_dotenv()
 
@@ -14,29 +15,35 @@ connection_pool = None
 
 def get_db_params():
     """Obtiene parámetros de conexión desde URL o variables individuales"""
-    database_url = os.getenv("DATABASE_URL")
+    logging.info("🔍 Obteniendo parámetros de base de datos...")
     
-    if database_url:
-        # Usar URL de conexión (Supabase)
-        parsed = urlparse(database_url)
-        return {
+    # Prioritizar DATABASE_URL si está disponible
+    if config.DATABASE_URL:
+        logging.info("✅ Usando DATABASE_URL para conexión")
+        parsed = urlparse(config.DATABASE_URL)
+        params = {
             'host': parsed.hostname,
             'port': parsed.port or 5432,
             'dbname': parsed.path[1:],  # Remove leading '/'
             'user': parsed.username,
             'password': parsed.password,
-            'sslmode': os.getenv("DB_SSL_MODE", "require")
+            'sslmode': config.DB_SSL_MODE
         }
+        logging.info(f"🔗 Conectando a: {parsed.hostname}:{parsed.port or 5432}")
+        return params
     else:
-        # Usar variables individuales (local)
-        return {
-            'host': os.getenv("DB_HOST"),
-            'port': os.getenv("DB_PORT"),
-            'dbname': os.getenv("DB_NAME"),
-            'user': os.getenv("DB_USER"),
-            'password': os.getenv("DB_PASSWORD"),
-            'sslmode': os.getenv("DB_SSL_MODE", "prefer")
+        # Usar variables individuales
+        logging.info("📋 Usando parámetros individuales para conexión")
+        params = {
+            'host': config.DB_HOST,
+            'port': int(config.DB_PORT),
+            'dbname': config.DB_NAME,
+            'user': config.DB_USER,
+            'password': config.DB_PASSWORD,
+            'sslmode': config.DB_SSL_MODE
         }
+        logging.info(f"🔗 Conectando a: {config.DB_HOST}:{config.DB_PORT}")
+        return params
 
 def initialize_connection_pool():
     """Inicializa el pool de conexiones"""

@@ -7,15 +7,25 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Configurar logging si no está configurado
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+
 # Detectar si estamos en Streamlit Cloud
 try:
     import streamlit as st
     IS_STREAMLIT_CLOUD = hasattr(st, 'secrets') and len(st.secrets) > 0
+    print(f"🔧 Streamlit Cloud detectado: {IS_STREAMLIT_CLOUD}")
     logging.info(f"🔧 Streamlit Cloud detectado: {IS_STREAMLIT_CLOUD}")
     if IS_STREAMLIT_CLOUD:
+        print(f"🔑 Secrets disponibles: {list(st.secrets.keys())}")
         logging.info(f"🔑 Secrets disponibles: {list(st.secrets.keys())}")
 except Exception as e:
     IS_STREAMLIT_CLOUD = False
+    print(f"⚠️ Error detectando Streamlit Cloud: {e}")
     logging.warning(f"⚠️ Error detectando Streamlit Cloud: {e}")
 
 def get_secret(key, default="", section=None):
@@ -25,19 +35,23 @@ def get_secret(key, default="", section=None):
             if section:
                 value = st.secrets[section].get(key, default)
                 masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret']) else value
+                print(f"🔑 Secret [{section}][{key}]: {masked_value}")
                 logging.info(f"🔑 Secret [{section}][{key}]: {masked_value}")
                 return value
             else:
                 value = st.secrets.get(key, default)
                 masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret']) else value
+                print(f"🔑 Secret [{key}]: {masked_value}")
                 logging.info(f"🔑 Secret [{key}]: {masked_value}")
                 return value
         except (KeyError, AttributeError) as e:
+            print(f"❌ Error obteniendo secret {section}.{key}: {e}")
             logging.warning(f"❌ Error obteniendo secret {section}.{key}: {e}")
             return default
     else:
         value = os.getenv(key, default)
         masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret']) else value
+        print(f"🌍 Env var [{key}]: {masked_value}")
         logging.info(f"🌍 Env var [{key}]: {masked_value}")
         return value
 

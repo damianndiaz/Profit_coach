@@ -6,6 +6,22 @@ Versión 2.0 con manejo robusto de errores y UX mejorado
 import streamlit as st
 import logging
 import time
+
+# Configurar logging al inicio
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),  # Para mostrar en consola/logs de Streamlit
+    ]
+)
+
+# Importar config después de configurar logging
+from config import config
+
+logging.info("🚀 Iniciando ProFit Coach...")
+logging.info(f"🔧 Configuración cargada: DB_HOST={config.DB_HOST}")
+
 from utils.app_utils import (
     safe_execute, navigation_state_manager, validate_input, validate_email,
     create_styled_button, confirm_action, with_loading, clear_form_states
