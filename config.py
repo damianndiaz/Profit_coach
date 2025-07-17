@@ -81,7 +81,7 @@ class Config:
     
     # Configuración de la aplicación
     MAX_ATHLETES_PER_USER = int(get_secret("MAX_ATHLETES_PER_USER", "50", "app") or "50")
-    MAX_MESSAGE_LENGTH = int(get_secret("MAX_MESSAGE_LENGTH", "2000", "app") or "2000")
+    MAX_MESSAGE_LENGTH = int(get_secret("MAX_MESSAGE_LENGTH", "4000", "app") or "4000")
     CHAT_HISTORY_LIMIT = int(get_secret("CHAT_HISTORY_LIMIT", "50", "app") or "50")
     SESSION_TIMEOUT_DAYS = int(get_secret("SESSION_TIMEOUT_DAYS", "30", "app") or "30")
     
