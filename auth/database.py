@@ -5,23 +5,47 @@ import time
 from dotenv import load_dotenv
 from psycopg2 import pool
 from contextlib import contextmanager
+from urllib.parse import urlparse
 
 load_dotenv()
 
 # Pool de conexiones para mejor rendimiento
 connection_pool = None
 
+def get_db_params():
+    """Obtiene parámetros de conexión desde URL o variables individuales"""
+    database_url = os.getenv("DATABASE_URL")
+    
+    if database_url:
+        # Usar URL de conexión (Supabase)
+        parsed = urlparse(database_url)
+        return {
+            'host': parsed.hostname,
+            'port': parsed.port or 5432,
+            'dbname': parsed.path[1:],  # Remove leading '/'
+            'user': parsed.username,
+            'password': parsed.password,
+            'sslmode': os.getenv("DB_SSL_MODE", "require")
+        }
+    else:
+        # Usar variables individuales (local)
+        return {
+            'host': os.getenv("DB_HOST"),
+            'port': os.getenv("DB_PORT"),
+            'dbname': os.getenv("DB_NAME"),
+            'user': os.getenv("DB_USER"),
+            'password': os.getenv("DB_PASSWORD"),
+            'sslmode': os.getenv("DB_SSL_MODE", "prefer")
+        }
+
 def initialize_connection_pool():
     """Inicializa el pool de conexiones"""
     global connection_pool
     try:
+        db_params = get_db_params()
         connection_pool = psycopg2.pool.ThreadedConnectionPool(
             1, 20,  # min y max conexiones
-            host=os.getenv("DB_HOST"),
-            port=os.getenv("DB_PORT"),
-            dbname=os.getenv("DB_NAME"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD")
+            **db_params
         )
         logging.info("Pool de conexiones inicializado correctamente")
     except Exception as e:
@@ -46,13 +70,8 @@ def get_db_connection(max_retries=3, retry_delay=1.0):
                     return conn
             
             # Fallback: conexión directa
-            return psycopg2.connect(
-                host=os.getenv("DB_HOST"),
-                port=os.getenv("DB_PORT"),
-                dbname=os.getenv("DB_NAME"),
-                user=os.getenv("DB_USER"),
-                password=os.getenv("DB_PASSWORD")
-            )
+            db_params = get_db_params()
+            return psycopg2.connect(**db_params)
             
         except Exception as e:
             last_exception = e

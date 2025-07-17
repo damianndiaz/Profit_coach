@@ -1,4 +1,9 @@
 .env
+.env.*
+test_*.py
+*_test.py
+README_NEW.md
+STREAMLIT_DEPLOY.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

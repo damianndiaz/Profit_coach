@@ -6,46 +6,72 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Detectar si estamos en Streamlit Cloud
+try:
+    import streamlit as st
+    IS_STREAMLIT_CLOUD = hasattr(st, 'secrets') and st.secrets
+except:
+    IS_STREAMLIT_CLOUD = False
+
+def get_secret(key, default="", section=None):
+    """Obtiene secretos de Streamlit Cloud o variables de entorno"""
+    if IS_STREAMLIT_CLOUD:
+        try:
+            if section:
+                return st.secrets[section][key]
+            else:
+                return st.secrets.get(key, default)
+        except:
+            return default
+    else:
+        return os.getenv(key, default)
+
 class Config:
     """Configuración principal de la aplicación"""
     
-    # Base de datos
-    DB_HOST = os.getenv("DB_HOST", "localhost")
-    DB_PORT = os.getenv("DB_PORT", "5432")
-    DB_NAME = os.getenv("DB_NAME", "profit_coach")
-    DB_USER = os.getenv("DB_USER", "postgres")
-    DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+    # Base de datos - Soporte para Supabase y PostgreSQL local
+    DB_HOST = get_secret("DB_HOST", "localhost", "database")
+    DB_PORT = get_secret("DB_PORT", "5432", "database")
+    DB_NAME = get_secret("DB_NAME", "profit_coach", "database")
+    DB_USER = get_secret("DB_USER", "postgres", "database")
+    DB_PASSWORD = get_secret("DB_PASSWORD", "", "database")
+    
+    # URL de conexión directa (para Supabase)
+    DATABASE_URL = get_secret("DATABASE_URL", "", "database")
+    
+    # SSL para conexiones en la nube (Supabase requiere SSL)
+    DB_SSL_MODE = get_secret("DB_SSL_MODE", "prefer", "database")
     
     # OpenAI
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-    OPENAI_ASSISTANT_ID = os.getenv("OPENAI_ASSISTANT_ID", "")
+    OPENAI_API_KEY = get_secret("OPENAI_API_KEY", "", "openai")
+    OPENAI_ASSISTANT_ID = get_secret("OPENAI_ASSISTANT_ID", "", "openai")
     
     # Email Configuration
-    EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
-    EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
-    EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() == "true"
-    EMAIL_USERNAME = os.getenv("EMAIL_USERNAME", "")
-    EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
-    EMAIL_FROM_NAME = os.getenv("EMAIL_FROM_NAME", "ProFit Coach")
-    EMAIL_FROM_EMAIL = os.getenv("EMAIL_FROM_EMAIL", "")
+    EMAIL_HOST = get_secret("EMAIL_HOST", "smtp.gmail.com", "email")
+    EMAIL_PORT = int(get_secret("EMAIL_PORT", "587", "email"))
+    EMAIL_USE_TLS = str(get_secret("EMAIL_USE_TLS", "True", "email")).lower() == "true"
+    EMAIL_USERNAME = get_secret("EMAIL_USERNAME", "", "email")
+    EMAIL_PASSWORD = get_secret("EMAIL_PASSWORD", "", "email")
+    EMAIL_FROM_NAME = get_secret("EMAIL_FROM_NAME", "ProFit Coach", "email")
+    EMAIL_FROM_EMAIL = get_secret("EMAIL_FROM_EMAIL", "", "email")
     
     # Configuración de la aplicación
-    MAX_ATHLETES_PER_USER = int(os.getenv("MAX_ATHLETES_PER_USER", "50"))
-    MAX_MESSAGE_LENGTH = int(os.getenv("MAX_MESSAGE_LENGTH", "2000"))
-    CHAT_HISTORY_LIMIT = int(os.getenv("CHAT_HISTORY_LIMIT", "50"))
-    SESSION_TIMEOUT_DAYS = int(os.getenv("SESSION_TIMEOUT_DAYS", "30"))
+    MAX_ATHLETES_PER_USER = int(get_secret("MAX_ATHLETES_PER_USER", "50", "app"))
+    MAX_MESSAGE_LENGTH = int(get_secret("MAX_MESSAGE_LENGTH", "2000", "app"))
+    CHAT_HISTORY_LIMIT = int(get_secret("CHAT_HISTORY_LIMIT", "50", "app"))
+    SESSION_TIMEOUT_DAYS = int(get_secret("SESSION_TIMEOUT_DAYS", "30", "app"))
     
     # Configuración de logging
-    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-    LOG_FILE = os.getenv("LOG_FILE", "profit_coach.log")
+    LOG_LEVEL = get_secret("LOG_LEVEL", "INFO", "app")
+    LOG_FILE = get_secret("LOG_FILE", "profit_coach.log", "app")
     
     # Configuración de conexiones
-    DB_POOL_MIN_CONN = int(os.getenv("DB_POOL_MIN_CONN", "1"))
-    DB_POOL_MAX_CONN = int(os.getenv("DB_POOL_MAX_CONN", "20"))
+    DB_POOL_MIN_CONN = int(get_secret("DB_POOL_MIN_CONN", "1", "app"))
+    DB_POOL_MAX_CONN = int(get_secret("DB_POOL_MAX_CONN", "20", "app"))
     
     # Timeouts
-    OPENAI_TIMEOUT = int(os.getenv("OPENAI_TIMEOUT", "30"))
-    DB_TIMEOUT = int(os.getenv("DB_TIMEOUT", "10"))
+    OPENAI_TIMEOUT = int(get_secret("OPENAI_TIMEOUT", "30", "app"))
+    DB_TIMEOUT = int(get_secret("DB_TIMEOUT", "10", "app"))
     
     @classmethod
     def validate_config(cls):
