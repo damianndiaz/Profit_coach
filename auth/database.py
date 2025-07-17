@@ -29,7 +29,9 @@ def get_db_params():
             'password': parsed.password,
             'sslmode': config.DB_SSL_MODE
         }
-        logging.info(f"🔗 Conectando a: {parsed.hostname}:{parsed.port or 5432}")
+        # Ocultar host completo en logs por seguridad
+        masked_host = parsed.hostname[:10] + "***" if parsed.hostname and len(parsed.hostname) > 10 else "***"
+        logging.info(f"🔗 Conectando a: {masked_host}:{parsed.port or 5432}")
         return params
     else:
         # Usar variables individuales
@@ -42,7 +44,9 @@ def get_db_params():
             'password': config.DB_PASSWORD,
             'sslmode': config.DB_SSL_MODE
         }
-        logging.info(f"🔗 Conectando a: {config.DB_HOST}:{config.DB_PORT}")
+        # Ocultar host completo en logs por seguridad
+        masked_host = config.DB_HOST[:10] + "***" if config.DB_HOST and len(config.DB_HOST) > 10 else "***"
+        logging.info(f"🔗 Conectando a: {masked_host}:{config.DB_PORT}")
         return params
 
 def initialize_connection_pool():

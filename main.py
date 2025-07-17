@@ -20,7 +20,9 @@ logging.basicConfig(
 from config import config
 
 logging.info("🚀 Iniciando ProFit Coach...")
-logging.info(f"🔧 Configuración cargada: DB_HOST={config.DB_HOST}")
+# Ocultar información sensible en logs
+masked_host = config.DB_HOST[:10] + "***" if config.DB_HOST and len(config.DB_HOST) > 10 else "***"
+logging.info(f"🔧 Configuración cargada: DB_HOST={masked_host}")
 
 from utils.app_utils import (
     safe_execute, navigation_state_manager, validate_input, validate_email,

@@ -34,6 +34,7 @@ def create_athletes_table():
     """Crea la tabla de atletas si no existe"""
     try:
         with get_db_cursor() as cursor:
+            # Crear tabla básica primero
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS athletes (
                     id SERIAL PRIMARY KEY,
@@ -45,19 +46,33 @@ def create_athletes_table():
                     email TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    is_active BOOLEAN DEFAULT TRUE,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 )
             """)
-            # Crear índices para mejores consultas
+            
+            # Verificar y agregar columna is_active si no existe
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'athletes' AND column_name = 'is_active'
+            """)
+            has_is_active = cursor.fetchone()
+            
+            if not has_is_active:
+                logging.info("Agregando columna is_active a tabla athletes...")
+                cursor.execute("ALTER TABLE athletes ADD COLUMN is_active BOOLEAN DEFAULT TRUE")
+                cursor.execute("UPDATE athletes SET is_active = TRUE WHERE is_active IS NULL")
+            
+            # Crear índices básicos (sin filtro WHERE hasta confirmar que la columna existe)
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_athletes_user_id 
-                ON athletes(user_id) WHERE is_active = TRUE
+                ON athletes(user_id)
             """)
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_athletes_sport 
-                ON athletes(sport) WHERE is_active = TRUE
+                ON athletes(sport)
             """)
+            
             logging.info("Tabla de atletas creada/verificada correctamente")
     except Exception as e:
         logging.error(f"Error al crear tabla de atletas: {e}")
