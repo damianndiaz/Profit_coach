@@ -58,21 +58,17 @@ def get_secret(key, default="", section=None):
 class Config:
     """Configuración principal de la aplicación"""
     
-    # Supabase Configuration
-    SUPABASE_URL = get_secret("url", "", "supabase")
-    SUPABASE_KEY = get_secret("anon_key", "", "supabase")
-    
-    # Base de datos - Usar Supabase como default  
-    DB_HOST = get_secret("host", "db.jnporlogtyoiimcoqjuv.supabase.co", "database")
+    # Base de datos - Usar Neon PostgreSQL
+    DB_HOST = get_secret("host", "ep-royal-unit-acq1k30a-pooler.sa-east-1.aws.neon.tech", "database")
     DB_PORT = get_secret("port", "5432", "database")
-    DB_NAME = get_secret("name", "postgres", "database")
-    DB_USER = get_secret("user", "postgres", "database")
-    DB_PASSWORD = get_secret("password", "Ramiro2403", "database")
+    DB_NAME = get_secret("name", "neondb", "database")
+    DB_USER = get_secret("user", "neondb_owner", "database")
+    DB_PASSWORD = get_secret("password", "npg_wML7Qj3eRSNA", "database")
     
-    # URL de conexión directa (para psycopg2)
-    DATABASE_URL = get_secret("url", "postgresql://postgres:Ramiro2403@db.jnporlogtyoiimcoqjuv.supabase.co:5432/postgres", "database")
+    # URL de conexión directa para Neon PostgreSQL
+    DATABASE_URL = get_secret("url", "postgresql://neondb_owner:npg_wML7Qj3eRSNA@ep-royal-unit-acq1k30a-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require", "database")
     
-    # SSL para conexiones en la nube (Supabase requiere SSL)
+    # SSL para conexiones en la nube (Neon requiere SSL)
     DB_SSL_MODE = get_secret("ssl_mode", "require", "database")
     
     # OpenAI

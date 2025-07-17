@@ -10,21 +10,8 @@ from config import config
 
 load_dotenv()
 
-# Intentar importar Supabase
-try:
-    from auth.supabase_client import get_supabase_client, test_supabase_connection
-    SUPABASE_AVAILABLE = True
-    logging.info("✅ Supabase SDK disponible")
-except ImportError:
-    SUPABASE_AVAILABLE = False
-    logging.warning("⚠️ Supabase SDK no disponible, usando psycopg2")
-
-# Pool de conexiones para mejor rendimiento (psycopg2 fallback)
+# Pool de conexiones para mejor rendimiento
 connection_pool = None
-
-def use_supabase():
-    """Determina si usar Supabase o psycopg2"""
-    return SUPABASE_AVAILABLE and config.SUPABASE_URL and config.SUPABASE_KEY
 
 def get_db_params():
     """Obtiene parámetros de conexión desde URL o variables individuales"""
@@ -140,16 +127,7 @@ def get_db_cursor():
 
 def test_db_connection():
     """Prueba la conexión a la base de datos"""
-    # Intentar con Supabase primero
-    if use_supabase():
-        logging.info("🚀 Probando conexión con Supabase SDK...")
-        try:
-            return test_supabase_connection()
-        except Exception as e:
-            logging.error(f"❌ Supabase falló: {e}")
-    
-    # Fallback a psycopg2
-    logging.info("🔄 Probando conexión con psycopg2...")
+    logging.info("� Probando conexión con PostgreSQL...")
     try:
         with get_db_cursor() as cursor:
             cursor.execute("SELECT 1")
