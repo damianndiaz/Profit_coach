@@ -156,20 +156,63 @@ def get_athletes_by_user(user_id):
             return []
         
         with get_db_cursor() as cursor:
-            cursor.execute(
-                """SELECT id, name, sport, level, goals, email, created_at, updated_at
-                   FROM athletes 
-                   WHERE user_id = %s AND is_active = TRUE 
-                   ORDER BY name ASC""",
-                (user_id,)
-            )
+            # Primero verificar qué columnas existen
+            cursor.execute("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'athletes'
+            """)
+            existing_columns = [row[0] for row in cursor.fetchall()]
+            
+            # Construir query dinámicamente basado en columnas disponibles
+            base_columns = ['id', 'name']
+            optional_columns = ['sport', 'level', 'goals', 'email', 'created_at', 'updated_at']
+            
+            select_columns = base_columns[:]
+            for col in optional_columns:
+                if col in existing_columns:
+                    select_columns.append(col)
+                else:
+                    # Agregar valor por defecto para columnas faltantes
+                    if col == 'sport':
+                        select_columns.append("'Fútbol' as sport")
+                    elif col == 'level':
+                        select_columns.append("'Intermedio' as level")
+                    elif col in ['goals', 'email']:
+                        select_columns.append(f"NULL as {col}")
+                    elif col in ['created_at', 'updated_at']:
+                        select_columns.append(f"CURRENT_TIMESTAMP as {col}")
+            
+            query = f"""
+                SELECT {', '.join(select_columns)}
+                FROM athletes 
+                WHERE user_id = %s 
+                {' AND is_active = TRUE' if 'is_active' in existing_columns else ''}
+                ORDER BY name ASC
+            """
+            
+            cursor.execute(query, (user_id,))
             athletes = cursor.fetchall()
             logging.info(f"Obtenidos {len(athletes)} atletas para usuario {user_id}")
             return athletes
             
     except Exception as e:
         logging.error(f"Error al obtener atletas para usuario {user_id}: {e}")
-        return []
+        # En caso de error, intentar query básica
+        try:
+            with get_db_cursor() as cursor:
+                cursor.execute(
+                    "SELECT id, name FROM athletes WHERE user_id = %s ORDER BY name ASC",
+                    (user_id,)
+                )
+                return cursor.fetchall()
+        except:
+            return []
+
+# Alias para compatibilidad con código existente
+def get_user_athletes(user_id):
+    """Alias de get_athletes_by_user para compatibilidad"""
+    return get_athletes_by_user(user_id)
 
 @retry_operation(max_retries=3)
 def get_athlete_data(athlete_id):

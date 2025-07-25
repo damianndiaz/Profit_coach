@@ -18,66 +18,69 @@ if not logging.getLogger().handlers:
 try:
     import streamlit as st
     IS_STREAMLIT_CLOUD = hasattr(st, 'secrets') and len(st.secrets) > 0
-    logging.info(f"🔧 Entorno: {'Cloud' if IS_STREAMLIT_CLOUD else 'Local'}")
+    logging.info(f"🔧 Entorno: {'Streamlit Cloud' if IS_STREAMLIT_CLOUD else 'Local'}")
 except Exception as e:
     IS_STREAMLIT_CLOUD = False
     logging.warning(f"⚠️ Error detectando entorno: entorno local")
 
 def get_secret(key, default="", section=None):
-    """Obtiene secretos de Streamlit Cloud o variables de entorno"""
+    """Obtiene secretos de Streamlit Cloud o variables de entorno
+    PRIORIDAD: Streamlit Secrets -> Variables de entorno -> Default
+    """
+    # Intentar primero desde Streamlit secrets
     if IS_STREAMLIT_CLOUD:
         try:
+            import streamlit as st
             if section:
-                value = st.secrets[section].get(key, default)
-                # Solo logear en desarrollo, NUNCA en producción
-                if not IS_STREAMLIT_CLOUD:
-                    masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret', 'url', 'host', 'id']) else value
-                    logging.debug(f"🔑 Secret [{section}][{key}]: {masked_value}")
-                return value
+                value = st.secrets[section].get(key, None)
+                if value is not None:
+                    logging.debug(f"🔑 Using Streamlit secret [{section}][{key}]")
+                    return value
             else:
-                value = st.secrets.get(key, default)
-                if not IS_STREAMLIT_CLOUD:
-                    masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret', 'url', 'host', 'id']) else value
-                    logging.debug(f"🔑 Secret [{key}]: {masked_value}")
-                return value
+                value = st.secrets.get(key, None)
+                if value is not None:
+                    logging.debug(f"🔑 Using Streamlit secret [{key}]")
+                    return value
         except (KeyError, AttributeError) as e:
-            logging.warning(f"❌ Error obteniendo secret {section}.{key}")
-            return default
+            logging.debug(f"🔍 Secret {section}.{key} not found in Streamlit secrets")
+    
+    # Si no está en secrets, usar variable de entorno
+    value = os.getenv(key, default)
+    if value != default:
+        logging.debug(f"🌍 Using environment variable [{key}]")
     else:
-        value = os.getenv(key, default)
-        # Solo en desarrollo local
-        masked_value = '***' if any(word in key.lower() for word in ['password', 'key', 'secret', 'url', 'host', 'id']) else value
-        logging.debug(f"🌍 Env var [{key}]: {masked_value}")
-        return value
+        logging.debug(f"⚠️ Using default value for [{key}]")
+    
+    return value
 
 class Config:
     """Configuración principal de la aplicación"""
     
-    # Base de datos - Usar Neon PostgreSQL
-    DB_HOST = get_secret("host", "ep-royal-unit-acq1k30a-pooler.sa-east-1.aws.neon.tech", "database")
-    DB_PORT = get_secret("port", "5432", "database")
-    DB_NAME = get_secret("name", "neondb", "database")
-    DB_USER = get_secret("user", "neondb_owner", "database")
-    DB_PASSWORD = get_secret("password", "npg_wML7Qj3eRSNA", "database")
+    # Base de datos - Usar Supabase PostgreSQL
+    DB_HOST = get_secret("DB_HOST", "aws-0-us-east-1.pooler.supabase.com")
+    DB_PORT = get_secret("DB_PORT", "6543")
+    DB_NAME = get_secret("DB_NAME", "postgres")
+    DB_USER = get_secret("DB_USER", "postgres.mrwnfbddqfqaadgycovt")
+    DB_PASSWORD = get_secret("DB_PASSWORD", "Profitcoach0011")
     
-    # URL de conexión directa para Neon PostgreSQL
-    DATABASE_URL = get_secret("url", "postgresql://neondb_owner:npg_wML7Qj3eRSNA@ep-royal-unit-acq1k30a-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require", "database")
+    # Database Configuration - Prioridad: Streamlit secrets -> ENV
+    DATABASE_URL = get_secret("url", section="database") or get_secret("DATABASE_URL", "postgresql://postgres.mrwnfbddqfqaadgycovt:Profitcoach0011@aws-0-us-east-1.pooler.supabase.com:6543/postgres")
     
-    # SSL para conexiones en la nube (Neon requiere SSL)
-    DB_SSL_MODE = get_secret("ssl_mode", "require", "database")
+    # SSL para conexiones en la nube (Supabase requiere SSL)
+    DB_SSL_MODE = get_secret("ssl_mode", "require", section="database") or get_secret("DB_SSL_MODE", "require")
     
-    # OpenAI
-    OPENAI_API_KEY = get_secret("api_key", "", "openai")
-    OPENAI_ASSISTANT_ID = get_secret("assistant_id", "", "openai")
+    # OpenAI Configuration - Prioridad: Streamlit secrets -> ENV
+    OPENAI_API_KEY = get_secret("api_key", section="openai") or get_secret("OPENAI_API_KEY", "")
+    OPENAI_ASSISTANT_ID = get_secret("assistant_id", section="openai") or get_secret("OPENAI_ASSISTANT_ID", "")
     
-    # Email Configuration
-    EMAIL_HOST = get_secret("host", "smtp.gmail.com", "email")
-    EMAIL_PORT = int(get_secret("port", "587", "email"))
-    EMAIL_USE_TLS = str(get_secret("use_tls", "True", "email")).lower() == "true"
-    EMAIL_USERNAME = get_secret("username", "", "email")
-    EMAIL_PASSWORD = get_secret("password", "", "email")
-    EMAIL_FROM_NAME = get_secret("from_name", "ProFit Coach", "email")
-    EMAIL_FROM_EMAIL = get_secret("from_email", "", "email")
+    # Email Configuration - Prioridad: Streamlit secrets -> ENV
+    EMAIL_HOST = get_secret("host", "smtp.gmail.com", section="email") or get_secret("EMAIL_HOST", "smtp.gmail.com")
+    EMAIL_PORT = int(get_secret("port", "587", section="email") or get_secret("EMAIL_PORT", "587"))
+    EMAIL_USE_TLS = str(get_secret("use_tls", "True", section="email") or get_secret("EMAIL_USE_TLS", "True")).lower() == "true"
+    EMAIL_USERNAME = get_secret("username", section="email") or get_secret("EMAIL_USERNAME", "")
+    EMAIL_PASSWORD = get_secret("password", section="email") or get_secret("EMAIL_PASSWORD", "")
+    EMAIL_FROM_NAME = get_secret("from_name", "ProFit Coach", section="email") or get_secret("EMAIL_FROM_NAME", "ProFit Coach")
+    EMAIL_FROM_EMAIL = get_secret("from_email", section="email") or get_secret("EMAIL_FROM_EMAIL", "")
     
     # Configuración de la aplicación
     MAX_ATHLETES_PER_USER = int(get_secret("MAX_ATHLETES_PER_USER", "50", "app") or "50")
@@ -152,13 +155,13 @@ class ProductionConfig(Config):
 
 def get_config():
     """Obtiene la configuración según el entorno"""
-    env = get_secret("ENVIRONMENT", "production", "app") or "production"  # Default a producción para seguridad
+    env = get_secret("ENVIRONMENT", "development")  # Default a desarrollo para testing local
     logging.info(f"🌍 Entorno detectado: {env}")
     
-    if env == "development":
-        return DevelopmentConfig()
-    else:
+    if env == "production":
         return ProductionConfig()
+    else:
+        return DevelopmentConfig()
 
 # Instancia global de configuración
 config = get_config()

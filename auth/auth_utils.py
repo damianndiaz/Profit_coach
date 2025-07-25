@@ -10,11 +10,20 @@ def validate_username(username):
     if not username or len(username.strip()) < 3:
         return False, "El usuario debe tener al menos 3 caracteres"
     
-    if len(username) > 30:
-        return False, "El usuario no puede exceder 30 caracteres"
+    if len(username) > 50:
+        return False, "El usuario no puede exceder 50 caracteres"
     
-    if not re.match("^[a-zA-Z0-9_]+$", username):
-        return False, "El usuario solo puede contener letras, números y guiones bajos"
+    # Permitir letras, números, espacios, guiones bajos y guiones
+    if not re.match("^[a-zA-ZÀ-ÿ0-9 _-]+$", username.strip()):
+        return False, "El usuario solo puede contener letras, números, espacios, guiones y guiones bajos"
+    
+    # Verificar que no tenga espacios múltiples consecutivos
+    if "  " in username:
+        return False, "No se permiten espacios múltiples consecutivos"
+    
+    # Verificar que no empiece o termine con espacio
+    if username != username.strip():
+        return False, "El usuario no puede empezar o terminar con espacios"
     
     return True, ""
 
@@ -42,7 +51,7 @@ def create_users_table():
                 CREATE TABLE IF NOT EXISTS users (
                     id SERIAL PRIMARY KEY,
                     username TEXT UNIQUE NOT NULL,
-                    password_hash BYTEA NOT NULL,
+                    password_hash TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_login TIMESTAMP,
                     is_active BOOLEAN DEFAULT TRUE
@@ -73,13 +82,16 @@ def register_user(username, password):
         if not valid_pass:
             return False, pass_msg
         
-        # Hash de la contraseña
+        # Hash de la contraseña como string (no bytes)
         password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        # Convertir a string para almacenar en TEXT column
+        password_hash_str = password_hash.decode('utf-8')
         
         with get_db_cursor() as cursor:
+            # Guardar username tal como lo escribió el usuario
             cursor.execute(
                 "INSERT INTO users (username, password_hash) VALUES (%s, %s)",
-                (username.lower(), password_hash)  # Normalizar a minúsculas
+                (username, password_hash_str)  # Guardar como string
             )
             logging.info(f"Usuario '{username}' registrado exitosamente")
             return True, "Usuario creado exitosamente"
@@ -99,7 +111,7 @@ def verify_user(username, password):
         if not username or not password:
             return False, "Usuario y contraseña son requeridos"
         
-        username = username.strip()  # Solo limpiar espacios, NO convertir a lowercase
+        username = username.strip()
         
         with get_db_cursor() as cursor:
             # Búsqueda case-insensitive usando LOWER()
@@ -120,23 +132,40 @@ def verify_user(username, password):
                 logging.warning(f"Intento de login con usuario inactivo: {actual_username}")
                 return False, "Cuenta desactivada"
             
-            # Normalizar hash si es necesario
-            if isinstance(password_hash, memoryview):
-                password_hash = password_hash.tobytes()
-            elif isinstance(password_hash, str):
-                password_hash = password_hash.encode('utf-8')
-            
-            if bcrypt.checkpw(password.encode('utf-8'), password_hash):
-                # Actualizar último login usando el username real de la BD
-                cursor.execute(
-                    "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE LOWER(username) = LOWER(%s)",
-                    (username,)
-                )
-                logging.info(f"Login exitoso para usuario: {actual_username}")
-                return True, "Login exitoso"
-            else:
-                logging.warning(f"Contraseña incorrecta para usuario: {actual_username}")
-                return False, "Credenciales incorrectas"
+            # Manejar password_hash como string
+            try:
+                # Si viene como string (lo esperado), convertir a bytes
+                if isinstance(password_hash, str):
+                    password_hash_bytes = password_hash.encode('utf-8')
+                elif isinstance(password_hash, bytes):
+                    password_hash_bytes = password_hash
+                elif isinstance(password_hash, memoryview):
+                    password_hash_bytes = password_hash.tobytes()
+                else:
+                    logging.error(f"Tipo de hash no soportado para usuario: {actual_username}")
+                    return False, "Error en los datos del usuario"
+                
+                # Verificar que el hash tenga el formato correcto
+                if not password_hash_bytes or len(password_hash_bytes) < 10:
+                    logging.error(f"Hash de contraseña inválido para usuario: {actual_username}")
+                    return False, "Error en los datos del usuario"
+                
+                # Verificar contraseña
+                if bcrypt.checkpw(password.encode('utf-8'), password_hash_bytes):
+                    # Actualizar último login usando el username exacto
+                    cursor.execute(
+                        "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE username = %s",
+                        (actual_username,)
+                    )
+                    logging.info(f"Login exitoso para usuario: {actual_username}")
+                    return True, "Login exitoso"
+                else:
+                    logging.warning(f"Contraseña incorrecta para usuario: {actual_username}")
+                    return False, "Credenciales incorrectas"
+                    
+            except ValueError as ve:
+                logging.error(f"Error de formato en hash para usuario {actual_username}: {ve}")
+                return False, "Error en el formato de datos. Contacta al administrador."
                 
     except Exception as e:
         logging.error(f"Error al verificar usuario '{username}': {e}")

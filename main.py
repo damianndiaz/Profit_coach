@@ -90,26 +90,50 @@ st.markdown("""
     .chat-user {
         background: #2563EB;
         color: white;
-        padding: 12px 16px;
-        border-radius: 12px 12px 0 12px;
-        margin: 8px 0;
-        max-width: 85%;
+        padding: 10px 14px;
+        border-radius: 18px 18px 4px 18px;
+        margin: 6px 0;
+        max-width: 75%;
         float: right;
         clear: both;
-        line-height: 1.5;
+        line-height: 1.4;
         word-wrap: break-word;
+        font-size: 0.9rem;
+        font-weight: 400;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     .chat-ai {
-        background: #F3F4F6;
-        color: #1F2937;
+        background: #F8FAFC;
+        color: #334155;
         padding: 12px 16px;
-        border-radius: 12px 12px 12px 0;
-        margin: 8px 0;
-        max-width: 85%;
+        border-radius: 18px 18px 18px 4px;
+        margin: 6px 0;
+        max-width: 80%;
         float: left;
         clear: both;
         line-height: 1.5;
         word-wrap: break-word;
+        font-size: 0.9rem;
+        font-weight: 400;
+        border: 1px solid #E2E8F0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .chat-ai strong {
+        font-weight: 600;
+        color: #1E293B;
+        font-size: 0.85rem;
+    }
+    .chat-ai h1, .chat-ai h2, .chat-ai h3 {
+        font-weight: 600;
+        margin: 8px 0 4px 0;
+        color: #1E293B;
+    }
+    .chat-ai code {
+        background: #F1F5F9;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        color: #475569;
     }
     .status-indicator {
         display: inline-block;
@@ -769,7 +793,7 @@ def show_chat_section(athletes):
                 is_email_command = detect_email_command(user_message)
                 
                 if is_email_command:
-                    st.info("📧 Detecté que quieres enviar algo por email. Procesando...")
+                    st.info("📧 ¡Perfecto! Detecté que quieres enviar algo por email. Generando rutina...")
                 
                 with st.spinner("🤖 Generando respuesta inteligente..."):
                     response = handle_user_message(athlete_id, user_message)
@@ -798,29 +822,45 @@ def show_chat_section(athletes):
                     from datetime import datetime
                     
                     athlete_data = get_athlete_data(athlete_id)
-                    email_to_use = auto_email_data.get('email') or athlete_data.get('email', '').strip()
+                    if not athlete_data:
+                        st.error("❌ Error: No se encontraron datos del atleta")
+                        return
                     
-                    if email_to_use:
+                    # Intentar obtener email del atleta
+                    athlete_email = None
+                    if len(athlete_data) > 5 and athlete_data[5]:  # Índice 5 es email
+                        athlete_email = athlete_data[5].strip()
+                    
+                    if not athlete_email:
+                        st.warning("⚠️ No hay email configurado para este atleta.")
+                        email_input = st.text_input("📧 Por favor, ingresa el email:", key=f"email_input_{athlete_id}")
+                        if st.button("✉️ Enviar a este email", key=f"confirm_email_{athlete_id}"):
+                            if email_input and "@" in email_input:
+                                athlete_email = email_input.strip()
+                            else:
+                                st.error("❌ Por favor ingresa un email válido")
+                                return
+                        else:
+                            return
+                    
+                    if athlete_email:
                         excel_data = create_simple_routine_excel(athlete_id, auto_email_data['routine'])
                         if excel_data:
                             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                            filename = f"Rutina_{athlete_data['name'].replace(' ', '_')}_{timestamp}.xlsx"
+                            filename = f"Rutina_{athlete_data[1].replace(' ', '_')}_{timestamp}.xlsx"  # Índice 1 es name
                             
-                            success, message = send_routine_email(email_to_use, athlete_data['name'], excel_data, filename)
+                            success, message = send_routine_email(athlete_email, athlete_data[1], excel_data, filename)
                             
                             if success:
-                                st.success(f"✅ ¡Rutina enviada exitosamente a {email_to_use}!")
+                                st.success(f"✅ ¡Rutina enviada exitosamente a {athlete_email}!")
                                 st.balloons()
+                                # Limpiar estado después del éxito
+                                del st.session_state[f'auto_email_routine_{athlete_id}']
+                                st.rerun()
                             else:
                                 st.error(f"❌ Error al enviar: {message}")
                         else:
                             st.error("❌ Error al generar el Excel")
-                    else:
-                        st.error("❌ No se encontró email válido")
-                    
-                    # Limpiar estado
-                    del st.session_state[f'auto_email_routine_{athlete_id}']
-                    st.rerun()
             
             with col2:
                 if st.button("❌ No por ahora", key=f"auto_cancel_{athlete_id}"):

@@ -5,20 +5,32 @@ Incluye configuración SMTP y plantillas de mensajes
 
 import smtplib
 import logging
-import streamlit as st
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from datetime import datetime
 import io
+
+try:
+    import streamlit as st
+    STREAMLIT_AVAILABLE = True
+except ImportError:
+    STREAMLIT_AVAILABLE = False
+    st = None
+
 from config import Config
 
 def get_email_credentials():
     """Obtiene las credenciales de email desde configuración"""
     try:
-        # Intentar obtener desde secrets de Streamlit primero
-        if hasattr(st, 'secrets') and 'email' in st.secrets:
+        # Verificar si tenemos credenciales básicas
+        if not Config.EMAIL_USERNAME or not Config.EMAIL_PASSWORD:
+            logging.error("❌ EMAIL_USERNAME o EMAIL_PASSWORD no configurados")
+            return None
+            
+        # Intentar obtener desde secrets de Streamlit primero (solo si está disponible)
+        if STREAMLIT_AVAILABLE and st and hasattr(st, 'secrets') and 'email' in st.secrets:
             return {
                 'server': st.secrets.email.get('host', Config.EMAIL_HOST),
                 'port': int(st.secrets.email.get('port', Config.EMAIL_PORT)),
@@ -29,7 +41,7 @@ def get_email_credentials():
                 'from_email': st.secrets.email.get('from_email', st.secrets.email.username)
             }
         else:
-            # Usar configuración del archivo config.py
+            # Usar configuración del archivo config.py (variables de entorno)
             return {
                 'server': Config.EMAIL_HOST,
                 'port': Config.EMAIL_PORT,

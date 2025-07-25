@@ -5,6 +5,19 @@ test_*.py
 README_NEW.md
 STREAMLIT_DEPLOY.md
 
+# Streamlit secrets (contiene credenciales)
+.streamlit/secrets.toml
+
+# Archivos temporales de desarrollo
+fix_*.py
+diagnose_*.py
+repair_*.py
+complete_*.py
+emergency_*.py
+*_backup.py
+*_optimized.py
+*.log
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
