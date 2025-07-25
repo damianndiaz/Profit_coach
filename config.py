@@ -18,10 +18,16 @@ if not logging.getLogger().handlers:
 try:
     import streamlit as st
     IS_STREAMLIT_CLOUD = hasattr(st, 'secrets') and len(st.secrets) > 0
-    logging.info(f"🔧 Entorno: {'Streamlit Cloud' if IS_STREAMLIT_CLOUD else 'Local'}")
+    if IS_STREAMLIT_CLOUD:
+        logging.info(f"🔧 Entorno: Streamlit Cloud - {len(st.secrets)} secciones de secrets detectadas")
+        # Log de secciones disponibles (sin valores sensibles)
+        secret_sections = list(st.secrets.keys()) if hasattr(st.secrets, 'keys') else []
+        logging.info(f"🔑 Secciones de secrets disponibles: {secret_sections}")
+    else:
+        logging.info("🔧 Entorno: Local")
 except Exception as e:
     IS_STREAMLIT_CLOUD = False
-    logging.warning(f"⚠️ Error detectando entorno: entorno local")
+    logging.warning(f"⚠️ Error detectando entorno: {e}")
 
 def get_secret(key, default="", section=None):
     """Obtiene secretos de Streamlit Cloud o variables de entorno
@@ -32,17 +38,21 @@ def get_secret(key, default="", section=None):
         try:
             import streamlit as st
             if section:
-                value = st.secrets[section].get(key, None)
-                if value is not None:
-                    logging.debug(f"🔑 Using Streamlit secret [{section}][{key}]")
+                if section in st.secrets and key in st.secrets[section]:
+                    value = st.secrets[section][key]
+                    logging.info(f"✅ Found secret [{section}][{key}]")
                     return value
+                else:
+                    logging.warning(f"⚠️ Secret [{section}][{key}] not found in Streamlit secrets")
             else:
-                value = st.secrets.get(key, None)
-                if value is not None:
-                    logging.debug(f"🔑 Using Streamlit secret [{key}]")
+                if key in st.secrets:
+                    value = st.secrets[key]
+                    logging.info(f"✅ Found secret [{key}]")
                     return value
-        except (KeyError, AttributeError) as e:
-            logging.debug(f"🔍 Secret {section}.{key} not found in Streamlit secrets")
+                else:
+                    logging.warning(f"⚠️ Secret [{key}] not found in Streamlit secrets")
+        except Exception as e:
+            logging.error(f"❌ Error accessing Streamlit secrets: {e}")
     
     # Si no está en secrets, usar variable de entorno
     value = os.getenv(key, default)
