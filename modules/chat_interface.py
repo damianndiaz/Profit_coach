@@ -13,10 +13,11 @@ from modules.chat_manager import get_or_create_chat_session, save_message, load_
 from modules.training_variations import get_sport_adaptation_principles, get_progression_guidelines
 from utils.app_utils import retry_operation, performance_monitor, with_loading
 import os
+from config import config
 
-# Configuración optimizada de OpenAI
-openai.api_key = os.getenv("OPENAI_API_KEY")
-OPENAI_ASSISTANT_ID = os.getenv("OPENAI_ASSISTANT_ID")
+# Configuración optimizada de OpenAI usando config centralizado
+openai.api_key = config.OPENAI_API_KEY
+OPENAI_ASSISTANT_ID = config.OPENAI_ASSISTANT_ID
 
 # Configuración de rendimiento optimizada
 OPENAI_TIMEOUT = 35  # Reducido para mejor experiencia

@@ -80,8 +80,8 @@ class Config:
     DB_SSL_MODE = get_secret("ssl_mode", "require", section="database") or get_secret("DB_SSL_MODE", "require")
     
     # OpenAI Configuration - Prioridad: Streamlit secrets -> ENV
-    OPENAI_API_KEY = get_secret("api_key", section="openai") or get_secret("OPENAI_API_KEY", "")
-    OPENAI_ASSISTANT_ID = get_secret("assistant_id", section="openai") or get_secret("OPENAI_ASSISTANT_ID", "")
+    OPENAI_API_KEY = get_secret("api_key", section="openai") or get_secret("OPENAI_API_KEY") or None
+    OPENAI_ASSISTANT_ID = get_secret("assistant_id", section="openai") or get_secret("OPENAI_ASSISTANT_ID") or None
     
     # Email Configuration - Prioridad: Streamlit secrets -> ENV
     EMAIL_HOST = get_secret("host", "smtp.gmail.com", section="email") or get_secret("EMAIL_HOST", "smtp.gmail.com")
