@@ -34,36 +34,55 @@ def create_athletes_table():
     """Crea la tabla de atletas si no existe"""
     try:
         with get_db_cursor() as cursor:
-            # Crear tabla básica primero
+            # Crear tabla básica con todas las columnas necesarias
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS athletes (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL,
                     name TEXT NOT NULL,
-                    sport TEXT NOT NULL,
-                    level TEXT NOT NULL,
+                    sport TEXT NOT NULL DEFAULT 'Fútbol',
+                    level TEXT NOT NULL DEFAULT 'Intermedio',
                     goals TEXT,
                     email TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    is_active BOOLEAN DEFAULT TRUE,
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 )
             """)
             
-            # Verificar y agregar columna is_active si no existe
+            # Verificar y agregar columnas faltantes una por una
+            required_columns = {
+                'sport': 'TEXT NOT NULL DEFAULT \'Fútbol\'',
+                'level': 'TEXT NOT NULL DEFAULT \'Intermedio\'',
+                'is_active': 'BOOLEAN DEFAULT TRUE',
+                'goals': 'TEXT',
+                'email': 'TEXT'
+            }
+            
+            # Obtener columnas existentes
             cursor.execute("""
                 SELECT column_name 
                 FROM information_schema.columns 
-                WHERE table_name = 'athletes' AND column_name = 'is_active'
+                WHERE table_name = 'athletes'
             """)
-            has_is_active = cursor.fetchone()
+            existing_columns = [row[0] for row in cursor.fetchall()]
             
-            if not has_is_active:
-                logging.info("Agregando columna is_active a tabla athletes...")
-                cursor.execute("ALTER TABLE athletes ADD COLUMN is_active BOOLEAN DEFAULT TRUE")
-                cursor.execute("UPDATE athletes SET is_active = TRUE WHERE is_active IS NULL")
+            # Agregar columnas faltantes
+            for col_name, col_def in required_columns.items():
+                if col_name not in existing_columns:
+                    logging.info(f"Agregando columna faltante: {col_name}")
+                    cursor.execute(f"ALTER TABLE athletes ADD COLUMN {col_name} {col_def}")
+                    
+                    # Actualizar registros existentes si es necesario
+                    if col_name == 'sport':
+                        cursor.execute("UPDATE athletes SET sport = 'Fútbol' WHERE sport IS NULL")
+                    elif col_name == 'level':
+                        cursor.execute("UPDATE athletes SET level = 'Intermedio' WHERE level IS NULL")
+                    elif col_name == 'is_active':
+                        cursor.execute("UPDATE athletes SET is_active = TRUE WHERE is_active IS NULL")
             
-            # Crear índices básicos (sin filtro WHERE hasta confirmar que la columna existe)
+            # Crear índices básicos (sin filtros problemáticos)
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_athletes_user_id 
                 ON athletes(user_id)
