@@ -3,21 +3,28 @@
 Versión optimizada de chat_interface.py con prompts más cortos y mejor rendimiento
 """
 
-import openai
+import os
 import logging
 import time
 import streamlit as st
 import re
+
+# IMPORTANTE: Importar config ANTES de openai para configurar la API key
+from config import config
+
+import openai
 from modules.athlete_manager import get_athlete_data
 from modules.chat_manager import get_or_create_chat_session, save_message, load_chat_history, get_or_create_thread_id, get_previous_routines, save_routine_summary
 from modules.training_variations import get_sport_adaptation_principles, get_progression_guidelines
 from utils.app_utils import retry_operation, performance_monitor, with_loading
-import os
-from config import config
 
 # Configuración optimizada de OpenAI usando config centralizado
 openai.api_key = config.OPENAI_API_KEY
 OPENAI_ASSISTANT_ID = config.OPENAI_ASSISTANT_ID
+
+# Log para debug
+logging.info(f"🔑 OpenAI API Key configured: {'YES' if openai.api_key else 'NO'}")
+logging.info(f"🤖 Assistant ID configured: {'YES' if OPENAI_ASSISTANT_ID else 'NO'}")
 
 # Configuración de rendimiento optimizada
 OPENAI_TIMEOUT = 35  # Reducido para mejor experiencia
@@ -26,9 +33,9 @@ MAX_RESPONSE_LENGTH = 4500  # Respuestas más cortas y rápidas
 
 # Validar configuración
 if not openai.api_key:
-    logging.error("OPENAI_API_KEY no configurada")
+    logging.error("❌ OPENAI_API_KEY no configurada - revisar secrets de Streamlit")
 if not OPENAI_ASSISTANT_ID:
-    logging.error("OPENAI_ASSISTANT_ID no configurada")
+    logging.error("❌ OPENAI_ASSISTANT_ID no configurada - revisar secrets de Streamlit")
 
 def validate_message(message):
     """Valida el mensaje del usuario - versión optimizada"""
