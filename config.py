@@ -59,14 +59,14 @@ class Config:
     """Configuración principal de la aplicación"""
     
     # Base de datos - Usar Supabase PostgreSQL
-    DB_HOST = get_secret("DB_HOST", "aws-0-us-east-1.pooler.supabase.com")
-    DB_PORT = get_secret("DB_PORT", "6543")
+    DB_HOST = get_secret("DB_HOST", "")
+    DB_PORT = get_secret("DB_PORT", "5432")
     DB_NAME = get_secret("DB_NAME", "postgres")
-    DB_USER = get_secret("DB_USER", "postgres.mrwnfbddqfqaadgycovt")
-    DB_PASSWORD = get_secret("DB_PASSWORD", "Profitcoach0011")
+    DB_USER = get_secret("DB_USER", "")
+    DB_PASSWORD = get_secret("DB_PASSWORD", "")
     
     # Database Configuration - Prioridad: Streamlit secrets -> ENV
-    DATABASE_URL = get_secret("url", section="database") or get_secret("DATABASE_URL", "postgresql://postgres.mrwnfbddqfqaadgycovt:Profitcoach0011@aws-0-us-east-1.pooler.supabase.com:6543/postgres")
+    DATABASE_URL = get_secret("url", section="database") or get_secret("DATABASE_URL", "")
     
     # SSL para conexiones en la nube (Supabase requiere SSL)
     DB_SSL_MODE = get_secret("ssl_mode", "require", section="database") or get_secret("DB_SSL_MODE", "require")
