@@ -24,10 +24,17 @@ except Exception as e:
     logging.warning(f"⚠️ Error detectando entorno: entorno local")
 
 def get_secret(key, default="", section=None):
-    """Obtiene secretos de Streamlit Cloud o variables de entorno
-    PRIORIDAD: Streamlit Secrets -> Variables de entorno -> Default
+    """Obtiene secretos de variables de entorno o Streamlit Cloud
+    RAMA DEV - PRIORIDAD: Variables de entorno -> Streamlit Secrets -> Default
     """
-    # Intentar primero desde Streamlit secrets
+    
+    # 1. PRIORIDAD: Variables de entorno (para desarrollo local - rama dev)
+    env_value = os.getenv(key, None)
+    if env_value is not None:
+        logging.debug(f"🌍 Using environment variable [{key}]")
+        return env_value
+    
+    # 2. Intentar desde Streamlit secrets (backup)
     if IS_STREAMLIT_CLOUD:
         try:
             import streamlit as st
@@ -44,14 +51,9 @@ def get_secret(key, default="", section=None):
         except (KeyError, AttributeError) as e:
             logging.debug(f"🔍 Secret {section}.{key} not found in Streamlit secrets")
     
-    # Si no está en secrets, usar variable de entorno
-    value = os.getenv(key, default)
-    if value != default:
-        logging.debug(f"🌍 Using environment variable [{key}]")
-    else:
-        logging.debug(f"⚠️ Using default value for [{key}]")
-    
-    return value
+    # 3. Valor por defecto
+    logging.debug(f"⚠️ Using default value for [{key}]")
+    return default
 
 class Config:
     """Configuración principal de la aplicación"""
