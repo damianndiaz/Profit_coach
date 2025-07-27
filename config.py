@@ -29,7 +29,7 @@ except Exception as e:
     IS_STREAMLIT_CLOUD = False
     logging.warning(f"⚠️ Error detectando entorno: {e}")
 
-def get_secret(key, default="", section=None):
+def get_secret(key, default="", section=None, silent=False):
     """Obtiene secretos de Streamlit Cloud o variables de entorno
     PRIORIDAD: Streamlit Secrets -> Variables de entorno -> Default
     """
@@ -40,26 +40,27 @@ def get_secret(key, default="", section=None):
             if section:
                 if section in st.secrets and key in st.secrets[section]:
                     value = st.secrets[section][key]
-                    logging.info(f"✅ Found secret [{section}][{key}]")
+                    if not silent:
+                        logging.info(f"✅ Found secret [{section}][{key}]")
                     return value
-                else:
-                    logging.warning(f"⚠️ Secret [{section}][{key}] not found in Streamlit secrets")
             else:
                 if key in st.secrets:
                     value = st.secrets[key]
-                    logging.info(f"✅ Found secret [{key}]")
+                    if not silent:
+                        logging.info(f"✅ Found secret [{key}]")
                     return value
-                else:
-                    logging.warning(f"⚠️ Secret [{key}] not found in Streamlit secrets")
         except Exception as e:
-            logging.error(f"❌ Error accessing Streamlit secrets: {e}")
+            if not silent:
+                logging.error(f"❌ Error accessing Streamlit secrets: {e}")
     
     # Si no está en secrets, usar variable de entorno
     value = os.getenv(key, default)
     if value != default:
-        logging.debug(f"🌍 Using environment variable [{key}]")
+        if not silent:
+            logging.debug(f"🌍 Using environment variable [{key}]")
     else:
-        logging.debug(f"⚠️ Using default value for [{key}]")
+        if not silent:
+            logging.debug(f"⚠️ Using default value for [{key}]")
     
     return value
 
@@ -92,23 +93,26 @@ class Config:
     EMAIL_FROM_NAME = get_secret("from_name", "ProFit Coach", section="email") or get_secret("EMAIL_FROM_NAME", "ProFit Coach")
     EMAIL_FROM_EMAIL = get_secret("from_email", section="email") or get_secret("EMAIL_FROM_EMAIL", "")
     
-    # Configuración de la aplicación
-    MAX_ATHLETES_PER_USER = int(get_secret("MAX_ATHLETES_PER_USER", "50", "app") or "50")
-    MAX_MESSAGE_LENGTH = int(get_secret("MAX_MESSAGE_LENGTH", "4000", "app") or "4000")
-    CHAT_HISTORY_LIMIT = int(get_secret("CHAT_HISTORY_LIMIT", "50", "app") or "50")
-    SESSION_TIMEOUT_DAYS = int(get_secret("SESSION_TIMEOUT_DAYS", "30", "app") or "30")
+    # Configuración de la aplicación (silenciosas para evitar warnings innecesarios)
+    MAX_ATHLETES_PER_USER = int(get_secret("MAX_ATHLETES_PER_USER", "50", "app", silent=True) or "50")
+    MAX_MESSAGE_LENGTH = int(get_secret("MAX_MESSAGE_LENGTH", "4000", "app", silent=True) or "4000")
+    CHAT_HISTORY_LIMIT = int(get_secret("CHAT_HISTORY_LIMIT", "50", "app", silent=True) or "50")
+    SESSION_TIMEOUT_DAYS = int(get_secret("SESSION_TIMEOUT_DAYS", "30", "app", silent=True) or "30")
     
     # Configuración de logging
-    LOG_LEVEL = get_secret("LOG_LEVEL", "WARNING", "app") or "WARNING"  # Menos verbose en producción
-    LOG_FILE = get_secret("LOG_FILE", "profit_coach.log", "app") or "profit_coach.log"
+    LOG_LEVEL = get_secret("LOG_LEVEL", "WARNING", "app", silent=True) or "WARNING"  # Menos verbose en producción
+    LOG_FILE = get_secret("LOG_FILE", "profit_coach.log", "app", silent=True) or "profit_coach.log"
     
     # Configuración de conexiones
-    DB_POOL_MIN_CONN = int(get_secret("DB_POOL_MIN_CONN", "1", "app") or "1")
-    DB_POOL_MAX_CONN = int(get_secret("DB_POOL_MAX_CONN", "20", "app") or "20")
+    DB_POOL_MIN_CONN = int(get_secret("DB_POOL_MIN_CONN", "1", "app", silent=True) or "1")
+    DB_POOL_MAX_CONN = int(get_secret("DB_POOL_MAX_CONN", "20", "app", silent=True) or "20")
     
     # Timeouts
-    OPENAI_TIMEOUT = int(get_secret("OPENAI_TIMEOUT", "30", "app") or "30")
-    DB_TIMEOUT = int(get_secret("DB_TIMEOUT", "10", "app") or "10")
+    OPENAI_TIMEOUT = int(get_secret("OPENAI_TIMEOUT", "30", "app", silent=True) or "30")
+    DB_TIMEOUT = int(get_secret("DB_TIMEOUT", "10", "app", silent=True) or "10")
+    
+    # Environment
+    ENVIRONMENT = get_secret("ENVIRONMENT", "development", silent=True)
     
     @classmethod
     def validate_config(cls):
