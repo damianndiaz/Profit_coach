@@ -1,22 +1,41 @@
 #!/usr/bin/env python3
 """
-Versión optimizada de chat_interface.py con prompts más cortos y mejor rendimiento
+ProFit Coach - Chat Interface con OpenAI v1.0+ compatibility
+Versión optimizada para mejor rendimiento
 """
 
-import openai
+import os
 import logging
 import time
 import streamlit as st
 import re
+
+# IMPORTANTE: Importar config ANTES de openai para configurar la API key
+from config import config
+
+# OpenAI v1.0+ - Usar cliente en lugar de módulo global
+from openai import OpenAI, APITimeoutError, RateLimitError, APIConnectionError
 from modules.athlete_manager import get_athlete_data
 from modules.chat_manager import get_or_create_chat_session, save_message, load_chat_history, get_or_create_thread_id, get_previous_routines, save_routine_summary
 from modules.training_variations import get_sport_adaptation_principles, get_progression_guidelines
 from utils.app_utils import retry_operation, performance_monitor, with_loading
-import os
 
-# Configuración optimizada de OpenAI
-openai.api_key = os.getenv("OPENAI_API_KEY")
-OPENAI_ASSISTANT_ID = os.getenv("OPENAI_ASSISTANT_ID")
+# Configuración OpenAI v1.0+ - NUEVA SINTAXIS
+OPENAI_API_KEY = config.OPENAI_API_KEY
+OPENAI_ASSISTANT_ID = config.OPENAI_ASSISTANT_ID
+
+# Crear cliente OpenAI (v1.0+ requiere cliente instanciado)
+if OPENAI_API_KEY:
+    openai_client = OpenAI(api_key=OPENAI_API_KEY)
+    logging.info("✅ OpenAI client v1.0+ configurado correctamente")
+else:
+    openai_client = None
+    logging.error("❌ OPENAI_API_KEY no configurada - revisar secrets de Streamlit")
+
+# Log para debug
+logging.info(f"🔑 OpenAI API Key configured: {'YES' if OPENAI_API_KEY else 'NO'}")
+logging.info(f"🤖 Assistant ID configured: {'YES' if OPENAI_ASSISTANT_ID else 'NO'}")
+logging.info(f"🔧 OpenAI Client: {'READY' if openai_client else 'NOT READY'}")
 
 # Configuración de rendimiento optimizada
 OPENAI_TIMEOUT = 35  # Reducido para mejor experiencia
@@ -24,10 +43,10 @@ POLL_INTERVAL = 1    # Polling más frecuente
 MAX_RESPONSE_LENGTH = 4500  # Respuestas más cortas y rápidas
 
 # Validar configuración
-if not openai.api_key:
-    logging.error("OPENAI_API_KEY no configurada")
+if not openai_client:
+    logging.error("❌ OPENAI_API_KEY no configurada - revisar secrets de Streamlit")
 if not OPENAI_ASSISTANT_ID:
-    logging.error("OPENAI_ASSISTANT_ID no configurada")
+    logging.error("❌ OPENAI_ASSISTANT_ID no configurada - revisar secrets de Streamlit")
 
 def validate_message(message):
     """Valida el mensaje del usuario - versión optimizada"""
@@ -103,19 +122,19 @@ def generate_ai_response_with_assistant(athlete_id, user_message):
         
         # Obtener o crear thread para el atleta
         def create_thread():
-            return openai.beta.threads.create()
+            return openai_client.beta.threads.create()
         
         thread_id = get_or_create_thread_id(athlete_id, create_thread)
         
         # Añadir mensaje del usuario
-        openai.beta.threads.messages.create(
+        openai_client.beta.threads.messages.create(
             thread_id=thread_id,
             role="user",
             content=prompt
         )
         
         # Ejecutar assistant con timeout optimizado
-        run = openai.beta.threads.runs.create(
+        run = openai_client.beta.threads.runs.create(
             thread_id=thread_id,
             assistant_id=OPENAI_ASSISTANT_ID
         )
@@ -130,7 +149,7 @@ def generate_ai_response_with_assistant(athlete_id, user_message):
                 return "⏱️ Timeout. Intenta con una pregunta más corta o específica."
             
             try:
-                run_status = openai.beta.threads.runs.retrieve(
+                run_status = openai_client.beta.threads.runs.retrieve(
                     thread_id=thread_id, 
                     run_id=run.id
                 )
@@ -151,7 +170,7 @@ def generate_ai_response_with_assistant(athlete_id, user_message):
         
         # Recuperar respuesta con optimización
         try:
-            messages = openai.beta.threads.messages.list(thread_id=thread_id)
+            messages = openai_client.beta.threads.messages.list(thread_id=thread_id)
             
             # Buscar respuesta más reciente
             for msg in messages.data:
@@ -172,11 +191,11 @@ def generate_ai_response_with_assistant(athlete_id, user_message):
             logging.error(f"Error recuperando respuesta: {e}")
             return "❌ Error recuperando respuesta. Inténtalo de nuevo."
         
-    except openai.APITimeoutError:
+    except APITimeoutError:
         return "⏱️ Timeout de API. Inténtalo de nuevo."
-    except openai.RateLimitError:
+    except RateLimitError:
         return "🚦 Servicio ocupado. Espera un momento e inténtalo de nuevo."
-    except openai.APIConnectionError:
+    except APIConnectionError:
         return "🌐 Error de conexión. Verifica tu internet."
     except Exception as e:
         logging.error(f"Error inesperado: {e}")

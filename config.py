@@ -18,42 +18,51 @@ if not logging.getLogger().handlers:
 try:
     import streamlit as st
     IS_STREAMLIT_CLOUD = hasattr(st, 'secrets') and len(st.secrets) > 0
-    logging.info(f"🔧 Entorno: {'Streamlit Cloud' if IS_STREAMLIT_CLOUD else 'Local'}")
+    if IS_STREAMLIT_CLOUD:
+        logging.info(f"🔧 Entorno: Streamlit Cloud - {len(st.secrets)} secciones de secrets detectadas")
+        # Log de secciones disponibles (sin valores sensibles)
+        secret_sections = list(st.secrets.keys()) if hasattr(st.secrets, 'keys') else []
+        logging.info(f"🔑 Secciones de secrets disponibles: {secret_sections}")
+    else:
+        logging.info("🔧 Entorno: Local")
 except Exception as e:
     IS_STREAMLIT_CLOUD = False
-    logging.warning(f"⚠️ Error detectando entorno: entorno local")
+    logging.warning(f"⚠️ Error detectando entorno: {e}")
 
-def get_secret(key, default="", section=None):
-    """Obtiene secretos de variables de entorno o Streamlit Cloud
-    RAMA DEV - PRIORIDAD: Variables de entorno -> Streamlit Secrets -> Default
+def get_secret(key, default="", section=None, silent=False):
+    """Obtiene secretos de Streamlit Cloud o variables de entorno
+    PRIORIDAD: Streamlit Secrets -> Variables de entorno -> Default
     """
-    
-    # 1. PRIORIDAD: Variables de entorno (para desarrollo local - rama dev)
-    env_value = os.getenv(key, None)
-    if env_value is not None:
-        logging.debug(f"🌍 Using environment variable [{key}]")
-        return env_value
-    
-    # 2. Intentar desde Streamlit secrets (backup)
+    # Intentar primero desde Streamlit secrets
     if IS_STREAMLIT_CLOUD:
         try:
             import streamlit as st
             if section:
-                value = st.secrets[section].get(key, None)
-                if value is not None:
-                    logging.debug(f"🔑 Using Streamlit secret [{section}][{key}]")
+                if section in st.secrets and key in st.secrets[section]:
+                    value = st.secrets[section][key]
+                    if not silent:
+                        logging.info(f"✅ Found secret [{section}][{key}]")
                     return value
             else:
-                value = st.secrets.get(key, None)
-                if value is not None:
-                    logging.debug(f"🔑 Using Streamlit secret [{key}]")
+                if key in st.secrets:
+                    value = st.secrets[key]
+                    if not silent:
+                        logging.info(f"✅ Found secret [{key}]")
                     return value
-        except (KeyError, AttributeError) as e:
-            logging.debug(f"🔍 Secret {section}.{key} not found in Streamlit secrets")
+        except Exception as e:
+            if not silent:
+                logging.error(f"❌ Error accessing Streamlit secrets: {e}")
     
-    # 3. Valor por defecto
-    logging.debug(f"⚠️ Using default value for [{key}]")
-    return default
+    # Si no está en secrets, usar variable de entorno
+    value = os.getenv(key, default)
+    if value != default:
+        if not silent:
+            logging.debug(f"🌍 Using environment variable [{key}]")
+    else:
+        if not silent:
+            logging.debug(f"⚠️ Using default value for [{key}]")
+    
+    return value
 
 class Config:
     """Configuración principal de la aplicación"""
@@ -72,8 +81,8 @@ class Config:
     DB_SSL_MODE = get_secret("ssl_mode", "require", section="database") or get_secret("DB_SSL_MODE", "require")
     
     # OpenAI Configuration - Prioridad: Streamlit secrets -> ENV
-    OPENAI_API_KEY = get_secret("api_key", section="openai") or get_secret("OPENAI_API_KEY", "")
-    OPENAI_ASSISTANT_ID = get_secret("assistant_id", section="openai") or get_secret("OPENAI_ASSISTANT_ID", "")
+    OPENAI_API_KEY = get_secret("api_key", section="openai") or get_secret("OPENAI_API_KEY") or None
+    OPENAI_ASSISTANT_ID = get_secret("assistant_id", section="openai") or get_secret("OPENAI_ASSISTANT_ID") or None
     
     # Email Configuration - Prioridad: Streamlit secrets -> ENV
     EMAIL_HOST = get_secret("host", "smtp.gmail.com", section="email") or get_secret("EMAIL_HOST", "smtp.gmail.com")
@@ -84,23 +93,26 @@ class Config:
     EMAIL_FROM_NAME = get_secret("from_name", "ProFit Coach", section="email") or get_secret("EMAIL_FROM_NAME", "ProFit Coach")
     EMAIL_FROM_EMAIL = get_secret("from_email", section="email") or get_secret("EMAIL_FROM_EMAIL", "")
     
-    # Configuración de la aplicación
-    MAX_ATHLETES_PER_USER = int(get_secret("MAX_ATHLETES_PER_USER", "50", "app") or "50")
-    MAX_MESSAGE_LENGTH = int(get_secret("MAX_MESSAGE_LENGTH", "4000", "app") or "4000")
-    CHAT_HISTORY_LIMIT = int(get_secret("CHAT_HISTORY_LIMIT", "50", "app") or "50")
-    SESSION_TIMEOUT_DAYS = int(get_secret("SESSION_TIMEOUT_DAYS", "30", "app") or "30")
+    # Configuración de la aplicación (silenciosas para evitar warnings innecesarios)
+    MAX_ATHLETES_PER_USER = int(get_secret("MAX_ATHLETES_PER_USER", "50", "app", silent=True) or "50")
+    MAX_MESSAGE_LENGTH = int(get_secret("MAX_MESSAGE_LENGTH", "4000", "app", silent=True) or "4000")
+    CHAT_HISTORY_LIMIT = int(get_secret("CHAT_HISTORY_LIMIT", "50", "app", silent=True) or "50")
+    SESSION_TIMEOUT_DAYS = int(get_secret("SESSION_TIMEOUT_DAYS", "30", "app", silent=True) or "30")
     
     # Configuración de logging
-    LOG_LEVEL = get_secret("LOG_LEVEL", "WARNING", "app") or "WARNING"  # Menos verbose en producción
-    LOG_FILE = get_secret("LOG_FILE", "profit_coach.log", "app") or "profit_coach.log"
+    LOG_LEVEL = get_secret("LOG_LEVEL", "WARNING", "app", silent=True) or "WARNING"  # Menos verbose en producción
+    LOG_FILE = get_secret("LOG_FILE", "profit_coach.log", "app", silent=True) or "profit_coach.log"
     
     # Configuración de conexiones
-    DB_POOL_MIN_CONN = int(get_secret("DB_POOL_MIN_CONN", "1", "app") or "1")
-    DB_POOL_MAX_CONN = int(get_secret("DB_POOL_MAX_CONN", "20", "app") or "20")
+    DB_POOL_MIN_CONN = int(get_secret("DB_POOL_MIN_CONN", "1", "app", silent=True) or "1")
+    DB_POOL_MAX_CONN = int(get_secret("DB_POOL_MAX_CONN", "20", "app", silent=True) or "20")
     
     # Timeouts
-    OPENAI_TIMEOUT = int(get_secret("OPENAI_TIMEOUT", "30", "app") or "30")
-    DB_TIMEOUT = int(get_secret("DB_TIMEOUT", "10", "app") or "10")
+    OPENAI_TIMEOUT = int(get_secret("OPENAI_TIMEOUT", "30", "app", silent=True) or "30")
+    DB_TIMEOUT = int(get_secret("DB_TIMEOUT", "10", "app", silent=True) or "10")
+    
+    # Environment
+    ENVIRONMENT = get_secret("ENVIRONMENT", "development", silent=True)
     
     @classmethod
     def validate_config(cls):

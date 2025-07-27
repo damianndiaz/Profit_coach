@@ -949,4 +949,19 @@ def main():
             st.rerun()
 
 if __name__ == "__main__":
+    # Debug temporal para Streamlit Cloud
+    if st.sidebar.button("🔍 Debug Config"):
+        st.sidebar.write("**Streamlit Environment:**")
+        st.sidebar.write(f"- Has secrets: {hasattr(st, 'secrets')}")
+        if hasattr(st, 'secrets'):
+            st.sidebar.write(f"- Secrets keys: {list(st.secrets.keys())}")
+            if 'openai' in st.secrets:
+                api_key = st.secrets['openai'].get('api_key', '')
+                st.sidebar.write(f"- API key length: {len(api_key)}")
+                st.sidebar.write(f"- API key valid format: {'✅' if api_key and api_key.startswith('sk-') else '❌'}")
+        
+        st.sidebar.write("**Config Values:**")
+        st.sidebar.write(f"- config.OPENAI_API_KEY: {'✅ SET' if config.OPENAI_API_KEY else '❌ NOT SET'}")
+        st.sidebar.write(f"- config.OPENAI_ASSISTANT_ID: {'✅ SET' if config.OPENAI_ASSISTANT_ID else '❌ NOT SET'}")
+    
     main()
