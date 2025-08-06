@@ -304,6 +304,11 @@ def delete_chat_session(session_id):
 @retry_operation(max_retries=3)
 def get_previous_routines(athlete_id, limit=3):
     """Obtiene rutinas previas del atleta para evitar repeticiones"""
+    
+    # Si limit es 0, devolver lista vacía para ahorrar tokens
+    if limit == 0:
+        return []
+        
     try:
         session_id = get_or_create_chat_session(athlete_id)
         if not session_id:
@@ -374,3 +379,35 @@ def save_routine_summary(session_id, message_text):
             
     except Exception as e:
         logging.error(f"Error al guardar resumen de rutina: {e}")
+
+@retry_operation(max_retries=3)
+@performance_monitor
+def get_chat_history_from_db(athlete_id, limit=50):
+    """Obtiene el historial de chat completo de un atleta"""
+    try:
+        if not athlete_id:
+            logging.warning("athlete_id es requerido")
+            return []
+        
+        with get_db_cursor() as cursor:
+            # Obtener mensajes de todas las sesiones activas del atleta
+            cursor.execute("""
+                SELECT cm.message_text, cm.is_from_user, cm.created_at 
+                FROM chat_messages cm
+                JOIN chat_sessions cs ON cm.session_id = cs.id
+                WHERE cs.athlete_id = %s AND cs.is_active = TRUE
+                ORDER BY cm.created_at DESC 
+                LIMIT %s
+            """, (athlete_id, limit))
+            
+            messages = cursor.fetchall()
+            
+            # Retornar en orden cronológico (más antiguo primero)
+            messages.reverse()
+            
+            logging.info(f"Historial cargado para atleta {athlete_id}: {len(messages)} mensajes")
+            return messages
+            
+    except Exception as e:
+        logging.error(f"Error al cargar historial para atleta {athlete_id}: {e}")
+        return []

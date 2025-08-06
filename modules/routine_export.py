@@ -348,6 +348,23 @@ def generate_routine_excel_from_chat(athlete_id, chat_message):
         
         if excel_data:
             logging.info(f"Excel generado exitosamente para {athlete_name}")
+            
+            # 💾 NUEVO: Guardar Excel en session_state para reutilización
+            timestamp = int(datetime.now().timestamp())
+            excel_key = f"excel_data_{athlete_id}_{timestamp}"
+            filename_key = f"{excel_key}_filename"
+            timestamp_key = f"{excel_key}_timestamp"
+            
+            athlete_name_clean = athlete_name.replace(' ', '_')
+            filename = f"Rutina_{athlete_name_clean}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+            
+            # Guardar en session_state
+            st.session_state[excel_key] = excel_data
+            st.session_state[filename_key] = filename
+            st.session_state[timestamp_key] = timestamp
+            
+            logging.info(f"📁 Excel guardado en session: {excel_key}")
+            
             return excel_data, athlete_name
         else:
             logging.error(f"Error al generar Excel para {athlete_name}")

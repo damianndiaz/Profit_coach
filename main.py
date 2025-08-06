@@ -6,6 +6,8 @@ Versión 2.0 con manejo robusto de errores y UX mejorado
 import streamlit as st
 import logging
 import time
+import pandas as pd
+import io
 
 # Configurar logging al inicio
 logging.basicConfig(
@@ -35,9 +37,17 @@ from modules.athlete_manager import (
     create_athletes_table, get_athletes_by_user, add_athlete, update_athlete, delete_athlete, get_athlete_data
 )
 from modules.chat_manager import create_chat_tables, create_thread_table
-from modules.chat_interface import handle_user_message, get_chat_history, detect_email_command
-from modules.routine_export import generate_routine_excel_from_chat, create_download_and_email_interface
+from modules.chat_interface import handle_user_message, get_chat_history, detect_email_command, get_welcome_message
+from modules.routine_export import generate_routine_excel_from_chat, create_download_and_email_interface, create_download_button
 from auth.database import test_db_connection, initialize_connection_pool
+
+# Importar Admin Dashboard
+try:
+    from modules.admin_dashboard import show_admin_interface
+    ADMIN_DASHBOARD_AVAILABLE = True
+except ImportError:
+    ADMIN_DASHBOARD_AVAILABLE = False
+    logging.warning("⚠️ Admin Dashboard no disponible")
 
 # Configuración de página
 st.set_page_config(
@@ -168,36 +178,47 @@ def preserve_session_state():
             st.session_state[key] = temp_value
 
 def initialize_app():
-    """Inicializa la aplicación con manejo de errores"""
+    """Inicializa la aplicación con manejo de errores - OPTIMIZADO"""
+    # 🚀 OPTIMIZACIÓN: Solo inicializar una vez por sesión
+    if st.session_state.get("app_initialized", False):
+        return  # Ya inicializado, salir inmediatamente
+    
     try:
-        # Configurar logging
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.StreamHandler(),
-                logging.FileHandler('profit_coach.log')
-            ]
-        )
+        # Configurar logging (solo si no está configurado)
+        if not logging.getLogger().handlers:
+            logging.basicConfig(
+                level=logging.INFO,
+                format='%(asctime)s - %(levelname)s - %(message)s',
+                handlers=[
+                    logging.StreamHandler(),
+                    logging.FileHandler('profit_coach.log')
+                ]
+            )
         
-        # Verificar conexión a BD
+        # Verificar conexión a BD (rápido)
         if not test_db_connection():
             st.error("❌ Error de conexión a la base de datos. Verifica la configuración.")
             st.stop()
         
-        # Inicializar pool de conexiones
-        initialize_connection_pool()
+        # Inicializar pool de conexiones (solo una vez)
+        if not st.session_state.get("db_pool_initialized", False):
+            initialize_connection_pool()
+            st.session_state["db_pool_initialized"] = True
         
-        # Crear tablas
-        create_users_table()
-        create_athletes_table()
-        create_chat_tables()
-        create_thread_table()
+        # Crear tablas (solo una vez)
+        if not st.session_state.get("tables_created", False):
+            create_users_table()
+            create_athletes_table()
+            create_chat_tables()
+            create_thread_table()
+            st.session_state["tables_created"] = True
         
         # Gestionar estado de navegación
         navigation_state_manager()
         
-        logging.info("Aplicación inicializada correctamente")
+        # Marcar como inicializado
+        st.session_state["app_initialized"] = True
+        logging.info("✅ Aplicación inicializada correctamente (optimizada)")
         
     except Exception as e:
         logging.error(f"Error al inicializar aplicación: {e}")
@@ -224,6 +245,13 @@ def show_app_status():
         
         if st.session_state.get("username"):
             st.markdown(f"**Usuario:** {st.session_state['username']}")
+            
+            # Admin Dashboard (solo para usuarios autenticados)
+            if ADMIN_DASHBOARD_AVAILABLE:
+                st.markdown("---")
+                if st.button("🛠️ Admin Dashboard", key="admin_dashboard_btn", use_container_width=True, help="Panel de administración y monitoreo"):
+                    st.session_state['show_admin_dashboard'] = True
+                    st.rerun()
             
             # Botón de logout mejorado
             if st.button("🚪 Cerrar Sesión", key="sidebar_logout", use_container_width=True):
@@ -465,6 +493,49 @@ def main_app(username):
     # Chat si hay atleta activo
     show_chat_section(athletes)
 
+def process_uploaded_file(file):
+    """Procesa un archivo adjunto y extrae su contenido"""
+    try:
+        file_size = len(file.getvalue()) / 1024  # KB
+        file_type = file.type if file.type else "application/octet-stream"
+        
+        # Resetear el puntero del archivo
+        file.seek(0)
+        
+        if file_type.startswith('text/') or file.name.endswith('.txt'):
+            # Archivos de texto
+            content = file.getvalue().decode('utf-8')
+            return f"📄 **{file.name}** ({file_size:.1f} KB) - Archivo de texto:\n```\n{content[:2000]}{'...' if len(content) > 2000 else ''}\n```"
+        
+        elif file_type in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'] or file.name.endswith(('.xlsx', '.xls')):
+            # Archivos Excel
+            try:
+                df = pd.read_excel(file, nrows=50)  # Limitar a 50 filas
+                content = df.to_string(max_rows=20, max_cols=10)
+                return f"📊 **{file.name}** ({file_size:.1f} KB) - Contenido Excel:\n```\n{content}\n```"
+            except Exception as e:
+                return f"📊 **{file.name}** ({file_size:.1f} KB) - Archivo Excel (error al leer: {str(e)})"
+        
+        elif file_type.startswith('image/'):
+            # Imágenes
+            return f"🖼️ **{file.name}** ({file_size:.1f} KB) - Imagen adjunta para análisis de ejercicios/técnica"
+        
+        elif file_type == 'application/pdf':
+            # PDFs
+            return f"📄 **{file.name}** ({file_size:.1f} KB) - Documento PDF adjunto"
+        
+        elif file_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' or file.name.endswith('.docx'):
+            # Word
+            return f"📝 **{file.name}** ({file_size:.1f} KB) - Documento Word adjunto"
+        
+        else:
+            # Otros archivos
+            return f"📎 **{file.name}** ({file_size:.1f} KB) - Archivo adjunto (tipo: {file_type})"
+            
+    except Exception as e:
+        logging.error(f"Error procesando archivo {file.name}: {e}")
+        return f"❌ **{file.name}** - Error al procesar archivo: {str(e)}"
+
 def show_athletes_section(athletes, user_id):
     """Muestra la sección de atletas con tarjetas mejoradas"""
     st.markdown("---")
@@ -507,17 +578,51 @@ def show_athletes_section(athletes, user_id):
 def show_athlete_management(athletes, user_id):
     """Panel de gestión de atletas mejorado"""
     st.markdown("---")
-    st.markdown("## ⚙️ Gestión de Atletas")
     
-    tab1, tab2 = st.tabs(["✏️ Editar Atleta", "➕ Agregar Nuevo"])
-    
-    with tab1:
-        if athletes:
-            selected_name = st.selectbox(
-                "👤 Seleccionar atleta", 
-                [a[1] for a in athletes],
-                help="Elige el atleta que deseas editar"
-            )
+    # 🔽 GESTIÓN DE ATLETAS con expander pero título grande
+    with st.expander("## ⚙️ Gestión de Atletas", expanded=False):
+        # 🔄 REORDENADO: Primero "Agregar Nuevo", después "Editar"
+        tab1, tab2 = st.tabs(["➕ Agregar Nuevo", "✏️ Editar Atleta"])
+        
+        # 🆕 TAB 1: AGREGAR NUEVO (AHORA PRIMERA)
+        with tab1:
+            with st.form("add_athlete_form"):
+                st.markdown("### 🆕 Nuevo Atleta")
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    name = st.text_input("👤 Nombre completo*")
+                    sport = st.text_input("🏃‍♂️ Deporte*")
+                with col2:
+                    level = st.selectbox(
+                        "📊 Nivel*", 
+                        ["Principiante", "Intermedio", "Avanzado", "Semi Profesional", "Élite"]
+                    )
+                    email = st.text_input("📧 Email")
+                
+                goals = st.text_area("🎯 Objetivos", height=100)
+                
+                if st.form_submit_button("✅ Crear Atleta", use_container_width=True, type="primary"):
+                    if name and sport and level:
+                        result = safe_execute(
+                            lambda: add_athlete(name, sport, level, goals or "Sin objetivos específicos", email),
+                            "Error al agregar atleta"
+                        )
+                        if result:
+                            st.success(f"✅ Atleta {name} agregado correctamente")
+                            time.sleep(1)
+                            st.rerun()
+                    else:
+                        st.error("❌ Por favor completa todos los campos obligatorios (*)")
+        
+        # ✏️ TAB 2: EDITAR ATLETA (AHORA SEGUNDA)
+        with tab2:
+            if athletes:
+                selected_name = st.selectbox(
+                    "👤 Seleccionar atleta", 
+                    [a[1] for a in athletes],
+                    help="Elige el atleta que deseas editar"
+                )
             
             athlete_data = next(a for a in athletes if a[1] == selected_name)
             
@@ -599,44 +704,8 @@ def show_athlete_management(athletes, user_id):
                     if st.button("❌ Cancelar", use_container_width=True):
                         del st.session_state[f"confirm_delete_{athlete_data[0]}"]
                         st.rerun()
-        else:
-            st.info("📝 No tienes atletas registrados para editar")
-    
-    with tab2:
-        with st.form("add_athlete_form"):
-            st.markdown("### ➕ Nuevo Atleta")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                name = st.text_input("👤 Nombre completo", help="Nombre y apellido del atleta")
-                sport = st.text_input("🏃‍♂️ Deporte principal", help="Ej: Fútbol, Tenis, Natación")
-            with col2:
-                level = st.selectbox("📊 Nivel", ["Principiante", "Intermedio", "Avanzado", "Semi Profesional", "Élite"])
-                email = st.text_input("📧 Email (opcional)", help="Email para notificaciones")
-            
-            goals = st.text_area(
-                "🎯 Objetivos", 
-                help="Describe los objetivos específicos del atleta",
-                height=100
-            )
-            
-            if st.form_submit_button("➕ Agregar Atleta", type="primary", use_container_width=True):
-                if validate_input(name, "Nombre", min_length=2) and validate_input(sport, "Deporte", min_length=2):
-                    if not email or validate_email(email):
-                        with st.spinner("Agregando atleta..."):
-                            success, message = safe_execute(
-                                lambda: add_athlete(user_id, name, sport, level, goals, email),
-                                "Error al agregar atleta",
-                                (False, "Error de conexión")
-                            )
-                            
-                            if success:
-                                st.success("✅ Atleta agregado exitosamente")
-                                st.balloons()
-                                time.sleep(1)
-                                st.rerun()
-                            else:
-                                st.error(f"❌ {message}")
+            else:
+                st.info("ℹ️ No tienes atletas registrados para editar")
 
 def show_chat_section(athletes):
     """Sección de chat mejorada"""
@@ -666,6 +735,34 @@ def show_chat_section(athletes):
                 st.session_state["active_athlete_chat"] = None
                 st.rerun()
         
+        # 🎯 AUTO-SCROLL MEJORADO: Scroll automático al último mensaje
+        if f"auto_scroll_{athlete_id}" not in st.session_state:
+            st.session_state[f"auto_scroll_{athlete_id}"] = True
+            # ⚡ USAR components.html para mejor control del scroll
+            import streamlit.components.v1 as components
+            components.html("""
+                <script>
+                function scrollToBottom() {
+                    // Scroll del contenedor principal
+                    window.scrollTo({
+                        top: document.body.scrollHeight,
+                        behavior: 'smooth'
+                    });
+                    
+                    // Scroll del contenedor del chat específicamente
+                    const chatContainer = document.querySelector('[data-testid="column"] div[style*="height: 500px"]');
+                    if (chatContainer) {
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
+                    }
+                }
+                
+                // Ejecutar después de que se cargue el DOM
+                setTimeout(scrollToBottom, 500);
+                // Backup - ejecutar de nuevo por si acaso
+                setTimeout(scrollToBottom, 1000);
+                </script>
+            """, height=0)
+        
         # Contenedor del chat
         chat_container = st.container(height=500, border=True)
         
@@ -677,32 +774,11 @@ def show_chat_section(athletes):
             )
             
             if not chat_history:
-                st.markdown("""
-                <div style='text-align:center; padding:40px; color:#6B7280;'>
-                    🎯 <strong>¡Hola! Soy ProFit Coach AI</strong> 🤖<br><br>
-                    
-                    <div style='color:#1F2937; margin:20px 0; font-size:1.1em;'>
-                        <strong>🚀 Especialista en Metodología de 5 Bloques</strong><br><br>
-                        
-                        <div style='background:#f0f9ff; padding:20px; border-radius:12px; margin:20px 0;'>
-                            <strong>� ¿Qué puedo hacer por ti?</strong><br><br>
-                            🏋️ <strong>Rutinas personalizadas</strong> con descarga automática en Excel<br>
-                            🥗 <strong>Consejos de nutrición</strong> deportiva específica<br>
-                            🛡️ <strong>Prevención de lesiones</strong> adaptada a tu deporte<br>
-                            🎯 <strong>Entrenamientos específicos</strong> según tu nivel<br><br>
-                        </div>
-                        
-                        <div style='background:#f0fdf4; padding:15px; border-radius:8px; margin:15px 0;'>
-                            <strong>💡 Ejemplos rápidos:</strong><br>
-                            🟢 "Rutina completa para fútbol"<br>
-                            🟢 "Ejercicios para prevenir lesiones"<br>
-                            🟢 "Circuito de fuerza y velocidad"<br>
-                        </div>
-                    </div>
-                    
-                    <p style='color:#9CA3AF; font-size:0.9em; margin-top:25px;'>
-                        ⚡ Sin tiempos fijos - adaptación completa a tus necesidades ⚡
-                    </p>
+                # Mostrar mensaje de bienvenida personalizado
+                welcome_msg = get_welcome_message(athlete_id)
+                st.markdown(f"""
+                <div style='text-align:center; padding:40px; color:#1F2937; background:#f8fafc; border-radius:12px;'>
+                    {welcome_msg.replace(chr(10), '<br>')}
                 </div>
                 """, unsafe_allow_html=True)
             
@@ -758,24 +834,79 @@ def show_chat_section(athletes):
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # Detectar rutinas sin marcador específico
-                        if any(keyword in ai_content.lower() for keyword in ['día 1', 'día 2', 'semana', 'rutina semanal', 'entrenamiento semanal']):
+                        # 🎯 DETECCIÓN INTELIGENTE: Solo mostrar botones si es realmente una rutina completa
+                        is_complete_routine = (
+                            # Debe contener múltiples días Y ejercicios específicos
+                            (ai_content.lower().count('día') >= 2 or ai_content.lower().count('sesión') >= 2) and
+                            # Debe contener patrones de ejercicios
+                            any(pattern in ai_content.lower() for pattern in [
+                                'x', 'rep', 'series', 'ejercicio', 'bloque', 'calentamiento'
+                            ]) and
+                            # Debe ser suficientemente largo (rutina completa)
+                            len(ai_content) > 500 and
+                            # No debe ser solo una pregunta o respuesta corta
+                            not any(question in ai_content.lower() for question in [
+                                '¿qué te parece?', '¿alguna pregunta?', '¿necesitas algo más?', 
+                                'cuéntame más', 'explícame', '¿cómo te sientes?'
+                            ])
+                        )
+                        
+                        if is_complete_routine:
                             excel_data, athlete_name = generate_routine_excel_from_chat(athlete_id, msg)
                             if excel_data:
                                 col1, col2, col3 = st.columns([1, 2, 1])
                                 with col2:
                                     st.markdown("---")
                                     st.markdown("**💡 ¿Quieres descargar esta rutina en Excel?**")
-                                    create_download_and_email_interface(athlete_id, excel_data, athlete_name, "Rutina_Entrenamiento", unique_id=f"{message_id}_alt")
+                                    # 🔄 SOLO mostrar botón de descarga (SIN email)
+                                    create_download_button(excel_data, athlete_name, "Rutina_Entrenamiento", unique_id=f"{message_id}_alt")
         
-        # Input del chat
+        # Input del chat con adjuntar archivos integrado estilo ChatGPT
+        
+        # File uploader fuera del form para evitar conflictos
+        attach_key = f"show_attach_{athlete_id}"
+        uploaded_files = None
+        
+        # Mostrar file uploader si se activó
+        if st.session_state.get(attach_key, False):
+            st.markdown("**📎 Selecciona archivos para adjuntar**")
+            uploaded_files = st.file_uploader(
+                "Archivos",
+                type=['pdf', 'jpg', 'jpeg', 'png', 'gif', 'xlsx', 'xls', 'docx', 'txt'],
+                accept_multiple_files=True,
+                key=f"file_uploader_{athlete_id}",
+                label_visibility="collapsed"
+            )
+            
+            # Mostrar preview de archivos seleccionados
+            if uploaded_files:
+                st.markdown("**📋 Archivos adjuntos:**")
+                cols = st.columns(min(len(uploaded_files), 4))
+                for idx, file in enumerate(uploaded_files):
+                    with cols[idx % 4]:
+                        file_size = len(file.getvalue()) / 1024  # KB
+                        if file.type and file.type.startswith('image/'):
+                            st.image(file, width=80)
+                        st.caption(f"{file.name} ({file_size:.1f} KB)")
+        
+        # Formulario del chat
         with st.form("chat_input_form", clear_on_submit=True, border=False):
-            col_input, col_send = st.columns([5, 1])
+            # 3 columnas: adjuntar, input, enviar
+            col_attach, col_input, col_send = st.columns([0.5, 4.5, 1])
+            
+            with col_attach:
+                attach_clicked = st.form_submit_button(
+                    "📎",
+                    help="Adjuntar archivos",
+                    type="secondary"
+                )
             
             with col_input:
+                # Placeholder dinámico según si hay archivos
+                placeholder_text = "Escribe tu mensaje sobre los archivos adjuntos..." if uploaded_files else "Pregunta algo sobre entrenamiento"
                 user_message = st.text_input(
                     "💬 Escribe tu mensaje...",
-                    placeholder="Pregunta algo sobre entrenamiento",
+                    placeholder=placeholder_text,
                     label_visibility="collapsed",
                     key=f"chat_input_{athlete_id}"
                 )
@@ -787,86 +918,81 @@ def show_chat_section(athletes):
                     type="primary"
                 )
             
+            # Manejar clic en adjuntar archivos
+            if attach_clicked:
+                st.session_state[attach_key] = not st.session_state.get(attach_key, False)
+                st.rerun()
+            
             # Procesar el mensaje cuando se envía
-            if send_clicked and user_message.strip():
-                # Detectar si es un comando de email
-                is_email_command = detect_email_command(user_message)
+            if send_clicked and (user_message.strip() or uploaded_files):
+                # Preparar el mensaje con archivos adjuntos
+                final_message = user_message.strip()
                 
-                if is_email_command:
-                    st.info("📧 ¡Perfecto! Detecté que quieres enviar algo por email. Generando rutina...")
+                # Si hay archivos adjuntos, procesar su contenido
+                if uploaded_files:
+                    file_contents = []
+                    
+                    for file in uploaded_files:
+                        # Procesar cada archivo usando la función especializada
+                        processed_content = process_uploaded_file(file)
+                        file_contents.append(processed_content)
+                    
+                    # Agregar contenido de archivos al mensaje
+                    if file_contents:
+                        if final_message:
+                            final_message = f"{final_message}\n\n[ARCHIVOS ADJUNTOS]\n" + "\n\n".join(file_contents)
+                        else:
+                            final_message = f"[ARCHIVOS ADJUNTOS]\n" + "\n\n".join(file_contents) + "\n\nAnaliza estos archivos y ayúdame con el entrenamiento."
+                    
+                    # Limpiar archivos adjuntos después del envío
+                    st.session_state[attach_key] = False
                 
-                with st.spinner("🤖 Generando respuesta inteligente..."):
-                    response = handle_user_message(athlete_id, user_message)
+                # Asegurar que el mensaje tenga contenido válido
+                if not final_message.strip():
+                    st.error("❌ Por favor escribe un mensaje o adjunta archivos")
+                    return
+                
+                with st.spinner("🤖 Procesando mensaje..."):
+                    response = handle_user_message(athlete_id, final_message)
                     if response:
-                        # Si es respuesta de email exitosa, mostrar confirmación especial
-                        if "✅" in response and "enviado" in response.lower():
-                            st.success("📧 ¡Email enviado exitosamente!")
+                        # Mostrar confirmación especial si se envió email
+                        if "✅" in response and "enviada exitosamente" in response:
+                            st.success("📧 ¡Rutina enviada por email!")
                             st.balloons()
                         st.rerun()
                     else:
                         st.error("❌ Error al procesar el mensaje")
         
-        # Mostrar interfaz de email automático si se detectó una rutina nueva con solicitud de email
-        if st.session_state.get(f'auto_email_routine_{athlete_id}'):
-            auto_email_data = st.session_state[f'auto_email_routine_{athlete_id}']
-            st.markdown("---")
-            st.markdown("### 📧 Envío Automático por Email")
-            st.info("🤖 Detecté que querías enviar la rutina por email. Aquí tienes las opciones:")
+        # Información sobre el email automático
+        with st.expander("📧 Envío Automático por Email", expanded=False):
+            st.markdown("""
+            **🚀 Sistema de Envío Automático:**
+
+            **✅ Funcionalidad Inteligente:**
+            - 🎯 Detecta automáticamente cuando solicitas envío por email
+            - 📧 Envía la rutina al email configurado del atleta
+            - 🔄 Si no hay email, te pide que lo proporciones
+            - 💾 Guarda el email automáticamente para futuros envíos
             
-            col1, col2 = st.columns(2)
+            **📝 Ejemplos de Comandos:**
+            - "*Rutina de fútbol y envíala por email*"
+            - "*Hazme un entrenamiento completo por mail*"
+            - "*Mi email es juan@ejemplo.com, mándame una rutina*"
+            - "*Circuito de fuerza por email*"
             
-            with col1:
-                if st.button("📤 Sí, enviar ahora", key=f"auto_send_{athlete_id}", type="primary"):
-                    from modules.routine_export import create_simple_routine_excel
-                    from modules.email_manager import send_routine_email
-                    from datetime import datetime
-                    
-                    athlete_data = get_athlete_data(athlete_id)
-                    if not athlete_data:
-                        st.error("❌ Error: No se encontraron datos del atleta")
-                        return
-                    
-                    # Intentar obtener email del atleta
-                    athlete_email = None
-                    if len(athlete_data) > 5 and athlete_data[5]:  # Índice 5 es email
-                        athlete_email = athlete_data[5].strip()
-                    
-                    if not athlete_email:
-                        st.warning("⚠️ No hay email configurado para este atleta.")
-                        email_input = st.text_input("📧 Por favor, ingresa el email:", key=f"email_input_{athlete_id}")
-                        if st.button("✉️ Enviar a este email", key=f"confirm_email_{athlete_id}"):
-                            if email_input and "@" in email_input:
-                                athlete_email = email_input.strip()
-                            else:
-                                st.error("❌ Por favor ingresa un email válido")
-                                return
-                        else:
-                            return
-                    
-                    if athlete_email:
-                        excel_data = create_simple_routine_excel(athlete_id, auto_email_data['routine'])
-                        if excel_data:
-                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                            filename = f"Rutina_{athlete_data[1].replace(' ', '_')}_{timestamp}.xlsx"  # Índice 1 es name
-                            
-                            success, message = send_routine_email(athlete_email, athlete_data[1], excel_data, filename)
-                            
-                            if success:
-                                st.success(f"✅ ¡Rutina enviada exitosamente a {athlete_email}!")
-                                st.balloons()
-                                # Limpiar estado después del éxito
-                                del st.session_state[f'auto_email_routine_{athlete_id}']
-                                st.rerun()
-                            else:
-                                st.error(f"❌ Error al enviar: {message}")
-                        else:
-                            st.error("❌ Error al generar el Excel")
+            **⚡ Proceso Automático:**
+            1. 🗣 Solicitas rutina + email
+            2. 🤖 AI genera rutina personalizada
+            3. 📊 Sistema crea Excel automáticamente
+            4. 📧 Envío inmediato sin botones adicionales
+            5. ✅ Confirmación en el chat
             
-            with col2:
-                if st.button("❌ No por ahora", key=f"auto_cancel_{athlete_id}"):
-                    del st.session_state[f'auto_email_routine_{athlete_id}']
-                    st.rerun()
-        
+            **🔧 Sin Configuración Manual:**
+            - ❌ No más botones de "enviar email"
+            - ❌ No más interfaces adicionales
+            - ✅ Todo automático con comandos de voz naturales
+            """)
+
         # Información adicional sobre el chat
         with st.expander("ℹ️ Metodología de 5 Bloques Especializados", expanded=False):
             st.markdown("""
@@ -890,7 +1016,7 @@ def show_chat_section(athletes):
             - ✅ Flexibilidad total en duración de cada bloque
             - 🎨 Variabilidad constante - nunca se repiten rutinas
             - � Personalización según deporte, nivel y objetivos
-            - � Posibilidad de elegir estructura tradicional o circuito integral
+            - 🎯 Posibilidad de elegir estructura tradicional o circuito integral
             
             **📥 Funcionalidad Excel Automática:**
             - 📊 Generación automática cuando detecta rutinas
@@ -931,7 +1057,16 @@ def main():
         show_app_status()
         
         # Enrutamiento basado en estado
-        if st.session_state.get("username"):
+        if st.session_state.get("show_admin_dashboard"):
+            # Mostrar Admin Dashboard
+            if ADMIN_DASHBOARD_AVAILABLE:
+                show_admin_interface()
+            else:
+                st.error("❌ Admin Dashboard no disponible")
+                if st.button("⬅️ Volver"):
+                    st.session_state.pop('show_admin_dashboard', None)
+                    st.rerun()
+        elif st.session_state.get("username"):
             main_app(st.session_state["username"])
         elif st.session_state.get("show_register"):
             register_screen()

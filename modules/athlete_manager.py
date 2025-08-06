@@ -1,7 +1,35 @@
 import logging
 import re
+import streamlit as st
 from auth.database import get_db_cursor
 from utils.app_utils import retry_operation, performance_monitor
+
+# ⚡ CACHE: Para optimizar consultas frecuentes
+@st.cache_data(ttl=300)  # Cache por 5 minutos
+def _get_cached_athlete_data(athlete_id):
+    """Versión cacheada de get_athlete_data"""
+    try:
+        with get_db_cursor() as cursor:
+            cursor.execute("""
+                SELECT id, name, sport, level, goals, email, created_at 
+                FROM athletes 
+                WHERE id = %s AND is_active = TRUE
+            """, (athlete_id,))
+            
+            result = cursor.fetchone()
+            if result:
+                return {
+                    'id': result[0],
+                    'name': result[1],
+                    'sport': result[2],
+                    'level': result[3],
+                    'goals': result[4] or '',
+                    'email': result[5] or '',
+                    'created_at': result[6]
+                }
+    except Exception as e:
+        logging.error(f"Error en cache de atleta {athlete_id}: {e}")
+    return None
 
 def validate_athlete_data(name, sport, level, email=None):
     """Valida datos del atleta"""
@@ -216,11 +244,17 @@ def get_user_athletes(user_id):
 
 @retry_operation(max_retries=3)
 def get_athlete_data(athlete_id):
-    """Obtiene datos completos de un atleta"""
+    """Obtiene datos completos de un atleta - OPTIMIZADO con cache"""
     try:
         if not athlete_id:
             return None
         
+        # ⚡ USAR CACHE primero
+        cached_data = _get_cached_athlete_data(athlete_id)
+        if cached_data:
+            return cached_data
+        
+        # Fallback a base de datos si cache falla
         with get_db_cursor() as cursor:
             cursor.execute(
                 """SELECT id, user_id, name, sport, level, goals, email, created_at, updated_at
@@ -351,3 +385,32 @@ def get_athlete_statistics(user_id):
     except Exception as e:
         logging.error(f"Error al obtener estadísticas de atletas: {e}")
         return []
+
+@retry_operation(max_retries=3)
+def update_athlete_email(athlete_id, email):
+    """Actualiza el email de un atleta"""
+    from auth.database import get_db_connection
+    import logging
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            UPDATE athletes 
+            SET email = %s 
+            WHERE athlete_id = %s
+        """, (email, athlete_id))
+        
+        conn.commit()
+        logging.info(f"Email actualizado para atleta {athlete_id}: {email}")
+        return True
+        
+    except Exception as e:
+        logging.error(f"Error actualizando email del atleta: {e}")
+        if conn:
+            conn.rollback()
+        return False
+    finally:
+        if conn:
+            conn.close()

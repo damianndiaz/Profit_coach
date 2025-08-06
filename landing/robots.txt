@@ -1,0 +1,12 @@
+# Robots.txt for ProFit Coach Landing Page
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://tu-dominio.com/sitemap.xml
+
+# Block AI crawlers (optional - uncomment if needed)
+# User-agent: GPTBot
+# Disallow: /
+# User-agent: Google-Extended
+# Disallow: /

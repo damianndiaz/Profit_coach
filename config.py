@@ -7,11 +7,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Configurar logging si no está configurado
+# ⚡ OPTIMIZACIÓN: Configurar logging más eficiente
 if not logging.getLogger().handlers:
     logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s'
+        level=logging.WARNING,  # Menos verbose para mayor velocidad
+        format='%(levelname)s - %(message)s'  # Formato más simple
     )
 
 # Detectar si estamos en Streamlit Cloud
