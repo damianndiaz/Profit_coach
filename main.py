@@ -9,6 +9,7 @@ import logging
 import time
 import pandas as pd
 import io
+import re
 
 # Configurar logging al inicio
 logging.basicConfig(
@@ -493,6 +494,9 @@ def main_app(username):
     
     # Chat si hay atleta activo
     show_chat_section(athletes)
+    
+    # Templates rápidos si están activos
+    show_quick_templates_section(athletes)
 
 def process_uploaded_file(file):
     """Procesa un archivo adjunto y extrae su contenido"""
@@ -579,6 +583,15 @@ def show_athletes_section(athletes, user_id):
                         type="primary"
                     ):
                         st.session_state["active_athlete_chat"] = athlete[0]
+                        st.rerun()
+                    
+                    if st.button(
+                        f"⚡ Rutinas Rápidas", 
+                        key=f"quick_templates_{athlete[0]}", 
+                        use_container_width=True,
+                        type="secondary"
+                    ):
+                        st.session_state["show_quick_templates"] = athlete[0]
                         st.rerun()
     else:
         st.markdown("""
@@ -720,6 +733,51 @@ def show_athlete_management(athletes, user_id):
             else:
                 st.info("ℹ️ No tienes atletas registrados para editar")
 
+def show_quick_templates_section(athletes):
+    """Sección de templates rápidos"""
+    athlete_id = st.session_state.get("show_quick_templates")
+    
+    if athlete_id:
+        athlete_name = None
+        for a in athletes:
+            if a[0] == athlete_id:
+                athlete_name = a[1]
+                break
+        
+        if not athlete_name:
+            st.error("❌ Atleta no encontrado")
+            st.session_state["show_quick_templates"] = None
+            st.rerun()
+            return
+        
+        st.markdown("---")
+        
+        # Header
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown(f"## ⚡ Rutinas Rápidas para {athlete_name}")
+            st.markdown("*Elige un template y se generará automáticamente en el chat*")
+        with col2:
+            if st.button("⬅️ Volver", use_container_width=True):
+                st.session_state["show_quick_templates"] = None
+                st.rerun()
+        
+        # Importar la función aquí para evitar errores de importación
+        try:
+            import sys
+            import os
+            # Asegurar que el path esté configurado correctamente
+            if '/workspaces/ProFit Coach' not in sys.path:
+                sys.path.insert(0, '/workspaces/ProFit Coach')
+            
+            from modules.quick_templates import show_quick_templates_interface
+            show_quick_templates_interface(athlete_id, athlete_name)
+        except ImportError as e:
+            st.error(f"❌ Error importando módulo de templates: {e}")
+            st.info("💡 Asegúrate de que el archivo modules/quick_templates.py existe")
+        except Exception as e:
+            st.error(f"❌ Error ejecutando templates: {e}")
+
 def show_chat_section(athletes):
     """Sección de chat mejorada"""
     athlete_id = st.session_state.get("active_athlete_chat")
@@ -812,13 +870,53 @@ def show_chat_section(athletes):
                     
                     # Detectar si es una rutina
                     if "[INICIO_NUEVA_RUTINA]" in ai_content:
-                        ai_content_clean = ai_content.replace("[INICIO_NUEVA_RUTINA]", "")
+                        ai_content_clean = ai_content.replace("[INICIO_NUEVA_RUTINA]", "").strip()
+                        
+                        # 🎯 MEJORAR FORMATO DE RUTINA
+                        # Separar por líneas y mejorar el formato visual
+                        lines = ai_content_clean.split('\n')
+                        formatted_content = []
+                        
+                        for line in lines:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            
+                            # Títulos principales
+                            if any(keyword in line.upper() for keyword in ['RUTINA', 'ENTRENAMIENTO', 'DÍA', 'SESIÓN']):
+                                if not any(char in line for char in [':', 'x', 'rep', 'min', 'seg']):  # No es ejercicio
+                                    formatted_content.append(f"<strong style='color:#2563EB; font-size:1.1em;'>{line}</strong>")
+                                    continue
+                            
+                            # Bloques de entrenamiento
+                            if any(keyword in line.upper() for keyword in ['BLOQUE', 'FASE', 'PARTE']):
+                                formatted_content.append(f"<strong style='color:#059669; font-size:1.05em;'>🔸 {line}</strong>")
+                                continue
+                            
+                            # Ejercicios (contienen repeticiones, series, etc.)
+                            if any(pattern in line.lower() for pattern in ['x', 'rep', 'serie', 'min', 'seg', '⏱️', '🔄']):
+                                # Mejorar formato de ejercicios
+                                exercise_line = line
+                                # Resaltar números de series/reps
+                                exercise_line = re.sub(r'(\d+)\s*x\s*(\d+)', r'<span style="background:#E3F2FD; padding:2px 6px; border-radius:4px; font-weight:bold;">\1 x \2</span>', exercise_line)
+                                # Resaltar tiempos
+                                exercise_line = re.sub(r'(\d+)\s*(min|seg|segundos|minutos)', r'<span style="background:#FFF3E0; padding:2px 6px; border-radius:4px; font-weight:bold;">\1 \2</span>', exercise_line)
+                                formatted_content.append(f"  • {exercise_line}")
+                                continue
+                            
+                            # Línea normal
+                            formatted_content.append(line)
+                        
+                        formatted_html = '<br>'.join(formatted_content)
+                        
                         st.markdown(f"""
                         <div style='display:flex; justify-content:flex-start; margin-bottom:16px;'>
-                            <div class='chat-ai' style='max-width: 85%;'>
-                                <strong>🤖 ProFit Coach AI - Nueva Rutina 💪:</strong><br>
-                                <div style='white-space: pre-line; font-family: monospace; font-size: 0.9em; background: #f8f9fa; padding: 12px; border-radius: 8px; margin-top: 8px;'>
-                                {ai_content_clean}
+                            <div class='chat-ai' style='max-width: 90%;'>
+                                <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 8px 12px; border-radius: 8px 8px 0 0; font-weight: bold;'>
+                                    🤖 ProFit Coach AI - Nueva Rutina Generada 💪
+                                </div>
+                                <div style='background: #f8f9fa; padding: 16px; border-radius: 0 0 8px 8px; border: 1px solid #e9ecef; line-height: 1.6;'>
+                                    {formatted_html}
                                 </div>
                             </div>
                         </div>
