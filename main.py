@@ -4,6 +4,7 @@ Versión 2.0 con manejo robusto de errores y UX mejorado
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import logging
 import time
 import pandas as pd
@@ -751,7 +752,6 @@ def show_chat_section(athletes):
         if f"auto_scroll_{athlete_id}" not in st.session_state:
             st.session_state[f"auto_scroll_{athlete_id}"] = True
             # ⚡ USAR components.html para mejor control del scroll
-            import streamlit.components.v1 as components
             components.html("""
                 <script>
                 function scrollToBottom() {
