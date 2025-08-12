@@ -45,7 +45,7 @@ def validate_athlete_data(name, sport, level, email=None):
     elif len(sport) > 50:
         errors.append("El deporte no puede exceder 50 caracteres")
     
-    valid_levels = ["Principiante", "Intermedio", "Avanzado", "Élite"]
+    valid_levels = ["Principiante", "Intermedio", "Avanzado", "Semi Profesional", "Élite"]
     if level not in valid_levels:
         errors.append(f"El nivel debe ser uno de: {', '.join(valid_levels)}")
     
