@@ -39,7 +39,7 @@ from modules.athlete_manager import (
 )
 from modules.chat_manager import create_chat_tables, create_thread_table
 from modules.chat_interface import handle_user_message, get_chat_history, detect_email_command, get_welcome_message
-from modules.routine_export import generate_routine_excel_from_chat, create_download_and_email_interface, create_download_button
+from modules.routine_export import generate_routine_excel_from_chat, create_download_button
 from auth.database import test_db_connection, initialize_connection_pool
 
 # Importar Admin Dashboard
@@ -829,11 +829,11 @@ def show_chat_section(athletes):
                         if excel_data:
                             col1, col2, col3 = st.columns([1, 2, 1])
                             with col2:
-                                create_download_and_email_interface(athlete_id, excel_data, athlete_name, "Rutina_Entrenamiento", unique_id=message_id)
+                                create_download_button(excel_data, athlete_name, "Rutina_Entrenamiento", unique_id=message_id)
                                 st.markdown("""
                                 <div style='text-align:center; margin:10px 0; padding:10px; background:#e8f5e8; border-radius:8px; color:#2d5a2d; font-size:0.9em;'>
-                                    ✅ <strong>Rutina lista para descargar y enviar</strong><br>
-                                    📁 Incluye: Días de entrenamiento, ejercicios detallados y envío por email
+                                    ✅ <strong>Rutina lista para descargar</strong><br>
+                                    📁 Incluye: Días de entrenamiento y ejercicios detallados en Excel
                                 </div>
                                 """, unsafe_allow_html=True)
                     else:
@@ -988,34 +988,37 @@ def show_chat_section(athletes):
                     else:
                         st.error("❌ Error al procesar el mensaje")
         
-        # Información sobre el email automático
-        with st.expander("📧 Envío Automático por Email", expanded=False):
+        # Información sobre el sistema de descarga y email automático
+        with st.expander("📧 Sistema de Descarga y Email Automático", expanded=False):
             st.markdown("""
-            **🚀 Sistema de Envío Automático:**
-
-            **✅ Funcionalidad Inteligente:**
-            - 🎯 Detecta automáticamente cuando solicitas envío por email
+            **� Descarga de Rutinas:**
+            - 📊 **Descarga Excel:** Botón automático en todas las rutinas generadas
+            - 📋 **Formato Profesional:** Hojas separadas por bloque + seguimiento
+            - 💾 **Archivo Completo:** Información del atleta y rutina detallada
+            
+            **📧 Envío Automático por Email (Solo mediante Chat):**
+            - 🎯 Detecta automáticamente cuando solicitas envío por email en el chat
             - 📧 Envía la rutina al email configurado del atleta
             - 🔄 Si no hay email, te pide que lo proporciones
             - 💾 Guarda el email automáticamente para futuros envíos
             
-            **📝 Ejemplos de Comandos:**
+            **📝 Ejemplos de Comandos para Email:**
             - "*Rutina de fútbol y envíala por email*"
             - "*Hazme un entrenamiento completo por mail*"
             - "*Mi email es juan@ejemplo.com, mándame una rutina*"
             - "*Circuito de fuerza por email*"
             
-            **⚡ Proceso Automático:**
-            1. 🗣 Solicitas rutina + email
-            2. 🤖 AI genera rutina personalizada
-            3. 📊 Sistema crea Excel automáticamente
-            4. 📧 Envío inmediato sin botones adicionales
-            5. ✅ Confirmación en el chat
+            **⚡ Proceso Simplificado:**
+            1. 🗣 Solicitas rutina (aparece botón de descarga automáticamente)
+            2. � **Opción 1:** Descargas Excel manualmente con el botón
+            3. 📧 **Opción 2:** Solicitas envío por email mediante comando en chat
+            4. ✅ Sistema procesa automáticamente según tu preferencia
             
-            **🔧 Sin Configuración Manual:**
-            - ❌ No más botones de "enviar email"
-            - ❌ No más interfaces adicionales
-            - ✅ Todo automático con comandos de voz naturales
+            **🎯 Ventajas del Sistema:**
+            - ✅ Interfaz más limpia (solo descarga visible)
+            - ✅ Email automático mediante comandos naturales
+            - ✅ Sin botones adicionales que compliquen la UI
+            - ✅ Flexibilidad total según tus necesidades
             """)
 
         # Información adicional sobre el chat
