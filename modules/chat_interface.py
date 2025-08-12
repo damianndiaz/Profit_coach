@@ -90,9 +90,9 @@ logging.info(f"🤖 Assistant ID configured: {'YES' if OPENAI_ASSISTANT_ID else 
 logging.info(f"🔧 OpenAI Client: {'READY' if openai_client else 'NOT READY'}")
 
 # Configuración de rendimiento optimizada
-OPENAI_TIMEOUT = 35  # Reducido para mejor experiencia
-POLL_INTERVAL = 1    # Polling más frecuente
-MAX_RESPONSE_LENGTH = 15000  # 🔄 AUMENTADO: Permite rutinas completas sin cortes
+OPENAI_TIMEOUT = 60  # 🔧 AUMENTADO: Más tiempo para respuestas complejas
+POLL_INTERVAL = 2    # 🔧 OPTIMIZADO: Polling menos agresivo para evitar rate limits
+MAX_RESPONSE_LENGTH = 25000  # � AUMENTADO: Permite rutinas completas sin cortes
 
 # Crear decorador simple si performance_monitor no está disponible
 def simple_performance_monitor(func):
@@ -425,7 +425,7 @@ def generate_ai_response_with_assistant(athlete_id, user_message):
                             except Exception as e:
                                 logging.warning(f"⚠️ No se pudo eliminar archivo {file_id}: {e}")
                     
-                    # 🎯 OPTIMIZACIÓN INTELIGENTE: Solo cortar si NO es rutina completa
+                    # 🎯 OPTIMIZACIÓN INTELIGENTE: Menos restrictivo para respuestas
                     # Verificar si era una solicitud de email (usando el contexto modificado)
                     is_email_request = "El usuario solicita que la rutina se envíe por email" in prompt
                     is_routine_response = any(keyword in response.lower() for keyword in [
@@ -433,13 +433,14 @@ def generate_ai_response_with_assistant(athlete_id, user_message):
                         'entrenamiento', 'ejercicio', 'series', 'repeticiones'
                     ])
                     
-                    # Solo aplicar límite si NO es una rutina y NO es email
+                    # 🔧 CORREGIDO: Límites más generosos para evitar cortes innecesarios
                     if not is_routine_response and not is_email_request:
-                        max_length = MAX_RESPONSE_LENGTH // 2  # Límite más estricto para respuestas generales
+                        # Para respuestas generales, permitir más contenido
+                        max_length = int(MAX_RESPONSE_LENGTH * 0.8)  # 80% del límite máximo (20,000 chars)
                         if len(response) > max_length:
-                            response = response[:max_length-50] + "\\n\\n⚡ *Respuesta resumida. Pregunta por detalles específicos.*"
-                    elif len(response) > MAX_RESPONSE_LENGTH * 3:  # Solo cortar rutinas EXTREMADAMENTE largas
-                        response = response[:MAX_RESPONSE_LENGTH * 3-100] + "\\n\\n📋 *Rutina optimizada. Solicita detalles adicionales si los necesitas.*"
+                            response = response[:max_length-100] + "\\n\\n⚡ *Respuesta resumida para mejor legibilidad. Pregunta por detalles específicos.*"
+                    elif len(response) > MAX_RESPONSE_LENGTH * 2:  # Solo cortar rutinas MUY largas
+                        response = response[:MAX_RESPONSE_LENGTH * 2-150] + "\\n\\n📋 *Rutina optimizada. Solicita secciones específicas si necesitas más detalle.*"
                     
                     # Estimar tokens usados
                     estimated_tokens_used = (len(prompt) + len(response)) // 4  # Aproximación

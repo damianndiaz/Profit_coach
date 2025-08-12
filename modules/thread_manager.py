@@ -27,8 +27,13 @@ class ThreadManager:
         self.TOKEN_SAFETY_MARGIN = 5000 # Margen de seguridad
         
     def _init_thread_monitoring(self):
-        """Inicializar tabla de monitoreo de threads"""
+        """Inicializar tabla de monitoreo de threads con manejo robusto de errores"""
         try:
+            # 🔒 SEGURIDAD: Verificar si el directorio existe y tiene permisos
+            db_dir = os.path.dirname(self.db_path)
+            if not os.path.exists(db_dir):
+                os.makedirs(db_dir, exist_ok=True)
+            
             # 🔒 OPTIMIZACIÓN: Conexión con timeout para evitar locks
             conn = sqlite3.connect(self.db_path, timeout=10.0)
             conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging para mejor concurrencia
@@ -47,6 +52,16 @@ class ThreadManager:
                     rotation_reason TEXT
                 )
             ''')
+            
+            conn.commit()
+            conn.close()
+            logging.info("✅ Thread monitoring database initialized")
+            
+        except Exception as e:
+            logging.error(f"❌ Error inicializando thread monitoring: {e}")
+            # 🔧 FALLBACK: Si SQLite falla, usar solo PostgreSQL
+            self.db_path = None
+            logging.warning("⚠️ Thread monitoring deshabilitado - funcionando sin cache local")
             
             cursor.execute('''
                 CREATE INDEX IF NOT EXISTS idx_thread_athlete 
@@ -74,7 +89,11 @@ class ThreadManager:
     def should_rotate_thread(self, athlete_id: int) -> Tuple[bool, str]:
         """Determina si el thread necesita rotación"""
         try:
-            conn = sqlite3.connect(self.db_path)
+            # 🔧 PROTECCIÓN: Verificar si SQLite está disponible
+            if not self.db_path:
+                return False, "SQLite no disponible - usando solo PostgreSQL"
+                
+            conn = sqlite3.connect(self.db_path, timeout=10.0)
             cursor = conn.cursor()
             
             cursor.execute('''
@@ -118,16 +137,23 @@ class ThreadManager:
     def rotate_thread(self, athlete_id: int, reason: str, openai_create_thread_func) -> str:
         """Rota el thread de un atleta creando uno nuevo"""
         try:
-            # 1. Marcar thread actual como inactivo en SQLite (monitoreo local)
-            conn = sqlite3.connect(self.db_path, timeout=10.0)
-            conn.execute("PRAGMA journal_mode=WAL")
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                UPDATE thread_monitoring 
-                SET is_active = FALSE, rotation_reason = ?
-                WHERE athlete_id = ? AND is_active = TRUE
-            ''', (reason, athlete_id))
+            # 🔧 PROTECCIÓN: Solo usar SQLite si está disponible
+            if self.db_path:
+                # 1. Marcar thread actual como inactivo en SQLite (monitoreo local)
+                conn = sqlite3.connect(self.db_path, timeout=10.0)
+                conn.execute("PRAGMA journal_mode=WAL")
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    UPDATE thread_monitoring 
+                    SET is_active = FALSE, rotation_reason = ?
+                    WHERE athlete_id = ? AND is_active = TRUE
+                ''', (reason, athlete_id))
+                
+                conn.commit()
+                conn.close()
+            else:
+                logging.warning("⚠️ SQLite no disponible - rotación simplificada")
             
             # 2. Crear nuevo thread en OpenAI
             thread = openai_create_thread_func()
@@ -145,12 +171,19 @@ class ThreadManager:
                 logging.error(f"❌ Error actualizando PostgreSQL: {pg_error}")
                 # Continuar con SQLite aunque PostgreSQL falle
             
-            # 4. Registrar nuevo thread en monitoreo SQLite
-            cursor.execute('''
-                INSERT INTO thread_monitoring 
-                (athlete_id, thread_id, estimated_tokens, message_count, created_at, last_used)
-                VALUES (?, ?, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            ''', (athlete_id, new_thread_id))
+            # 4. Registrar nuevo thread en monitoreo SQLite si está disponible
+            if self.db_path:
+                conn = sqlite3.connect(self.db_path, timeout=10.0)
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    INSERT INTO thread_monitoring 
+                    (athlete_id, thread_id, estimated_tokens, message_count, created_at, last_used)
+                    VALUES (?, ?, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ''', (athlete_id, new_thread_id))
+                
+                conn.commit()
+                conn.close()
             
             conn.commit()
             conn.close()
@@ -195,11 +228,16 @@ class ThreadManager:
     def log_message_tokens(self, athlete_id: int, message: str, response: str = ""):
         """Registra tokens usados en un mensaje"""
         try:
+            # 🔧 PROTECCIÓN: Solo usar SQLite si está disponible
+            if not self.db_path:
+                logging.debug("⚠️ SQLite no disponible - skipping token logging")
+                return
+                
             message_tokens = self.estimate_message_tokens(message)
             response_tokens = self.estimate_message_tokens(response) if response else 0
             total_tokens = message_tokens + response_tokens
             
-            conn = sqlite3.connect(self.db_path)
+            conn = sqlite3.connect(self.db_path, timeout=10.0)
             cursor = conn.cursor()
             
             cursor.execute('''
@@ -217,11 +255,16 @@ class ThreadManager:
             
         except Exception as e:
             logging.error(f"❌ Error logging message tokens: {e}")
+            # No fallar la operación principal por esto
     
     def _ensure_thread_monitoring(self, athlete_id: int, thread_id: str):
         """Asegura que el thread esté en la tabla de monitoreo"""
         try:
-            conn = sqlite3.connect(self.db_path)
+            # 🔧 PROTECCIÓN: Solo usar SQLite si está disponible
+            if not self.db_path:
+                return
+                
+            conn = sqlite3.connect(self.db_path, timeout=10.0)
             cursor = conn.cursor()
             
             cursor.execute('''

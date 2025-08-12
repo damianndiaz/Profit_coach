@@ -10,8 +10,8 @@ load_dotenv()
 # ⚡ OPTIMIZACIÓN: Configurar logging más eficiente
 if not logging.getLogger().handlers:
     logging.basicConfig(
-        level=logging.WARNING,  # Menos verbose para mayor velocidad
-        format='%(levelname)s - %(message)s'  # Formato más simple
+        level=logging.ERROR,  # Solo errores críticos para reducir ruido
+        format='%(asctime)s - %(levelname)s - %(message)s'  # Formato con timestamp
     )
 
 # Detectar si estamos en Streamlit Cloud
