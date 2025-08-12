@@ -94,13 +94,13 @@ class Config:
     EMAIL_FROM_EMAIL = get_secret("from_email", section="email") or get_secret("EMAIL_FROM_EMAIL", "")
     
     # Configuración de la aplicación (silenciosas para evitar warnings innecesarios)
-    MAX_ATHLETES_PER_USER = int(get_secret("MAX_ATHLETES_PER_USER", "50", "app", silent=True) or "50")
-    MAX_MESSAGE_LENGTH = int(get_secret("MAX_MESSAGE_LENGTH", "4000", "app", silent=True) or "4000")
-    CHAT_HISTORY_LIMIT = int(get_secret("CHAT_HISTORY_LIMIT", "50", "app", silent=True) or "50")
+    MAX_ATHLETES_PER_USER = int(get_secret("MAX_ATHLETES_PER_USER", "100", "app", silent=True) or "100")  # Aumentado para producción
+    MAX_MESSAGE_LENGTH = int(get_secret("MAX_MESSAGE_LENGTH", "8000", "app", silent=True) or "8000")  # Aumentado para archivos
+    CHAT_HISTORY_LIMIT = int(get_secret("CHAT_HISTORY_LIMIT", "100", "app", silent=True) or "100")  # Más historial
     SESSION_TIMEOUT_DAYS = int(get_secret("SESSION_TIMEOUT_DAYS", "30", "app", silent=True) or "30")
     
     # Configuración de logging
-    LOG_LEVEL = get_secret("LOG_LEVEL", "WARNING", "app", silent=True) or "WARNING"  # Menos verbose en producción
+    LOG_LEVEL = get_secret("LOG_LEVEL", "INFO", "app", silent=True) or "INFO"  # Más detallado para producción inicial
     LOG_FILE = get_secret("LOG_FILE", "profit_coach.log", "app", silent=True) or "profit_coach.log"
     
     # Configuración de conexiones

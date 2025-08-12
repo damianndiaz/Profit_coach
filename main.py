@@ -496,7 +496,16 @@ def main_app(username):
 def process_uploaded_file(file):
     """Procesa un archivo adjunto y extrae su contenido"""
     try:
+        # Verificar que el archivo es válido
+        if not file or not hasattr(file, 'getvalue'):
+            return "❌ Archivo inválido o corrupto"
+            
         file_size = len(file.getvalue()) / 1024  # KB
+        
+        # Verificar tamaño máximo (10MB)
+        if file_size > 10240:  # 10MB en KB
+            return f"❌ **{file.name}** - Archivo demasiado grande ({file_size:.1f} KB). Máximo permitido: 10MB"
+        
         file_type = file.type if file.type else "application/octet-stream"
         
         # Resetear el puntero del archivo
@@ -504,8 +513,11 @@ def process_uploaded_file(file):
         
         if file_type.startswith('text/') or file.name.endswith('.txt'):
             # Archivos de texto
-            content = file.getvalue().decode('utf-8')
-            return f"📄 **{file.name}** ({file_size:.1f} KB) - Archivo de texto:\n```\n{content[:2000]}{'...' if len(content) > 2000 else ''}\n```"
+            try:
+                content = file.getvalue().decode('utf-8')
+                return f"📄 **{file.name}** ({file_size:.1f} KB) - Archivo de texto:\n```\n{content[:2000]}{'...' if len(content) > 2000 else ''}\n```"
+            except UnicodeDecodeError:
+                return f"📄 **{file.name}** ({file_size:.1f} KB) - Archivo de texto (error de codificación - usar UTF-8)"
         
         elif file_type in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'] or file.name.endswith(('.xlsx', '.xls')):
             # Archivos Excel
@@ -533,8 +545,8 @@ def process_uploaded_file(file):
             return f"📎 **{file.name}** ({file_size:.1f} KB) - Archivo adjunto (tipo: {file_type})"
             
     except Exception as e:
-        logging.error(f"Error procesando archivo {file.name}: {e}")
-        return f"❌ **{file.name}** - Error al procesar archivo: {str(e)}"
+        logging.error(f"Error procesando archivo {getattr(file, 'name', 'unknown')}: {e}")
+        return f"❌ **{getattr(file, 'name', 'archivo')}** - Error al procesar archivo: {str(e)}"
 
 def show_athletes_section(athletes, user_id):
     """Muestra la sección de atletas con tarjetas mejoradas"""
@@ -928,7 +940,16 @@ def show_chat_section(athletes):
                 # Preparar el mensaje con archivos adjuntos
                 final_message = user_message.strip()
                 
-                # Si hay archivos adjuntos, procesar su contenido
+                # 🔧 ALMACENAR archivos en session_state para OpenAI
+                if uploaded_files:
+                    # Resetear los punteros de todos los archivos
+                    for file in uploaded_files:
+                        file.seek(0)
+                    
+                    # Guardar archivos en session_state para el chat_interface
+                    st.session_state[f"uploaded_files_{athlete_id}"] = uploaded_files
+                
+                # Si hay archivos adjuntos, procesar su contenido para mostrar al usuario
                 if uploaded_files:
                     file_contents = []
                     
@@ -944,7 +965,7 @@ def show_chat_section(athletes):
                         else:
                             final_message = f"[ARCHIVOS ADJUNTOS]\n" + "\n\n".join(file_contents) + "\n\nAnaliza estos archivos y ayúdame con el entrenamiento."
                     
-                    # Limpiar archivos adjuntos después del envío
+                    # Limpiar archivos adjuntos de la UI después del envío
                     st.session_state[attach_key] = False
                 
                 # Asegurar que el mensaje tenga contenido válido
@@ -955,6 +976,10 @@ def show_chat_section(athletes):
                 with st.spinner("🤖 Procesando mensaje..."):
                     response = handle_user_message(athlete_id, final_message)
                     if response:
+                        # Limpiar archivos de session_state después del procesamiento
+                        if f"uploaded_files_{athlete_id}" in st.session_state:
+                            del st.session_state[f"uploaded_files_{athlete_id}"]
+                        
                         # Mostrar confirmación especial si se envió email
                         if "✅" in response and "enviada exitosamente" in response:
                             st.success("📧 ¡Rutina enviada por email!")

@@ -299,12 +299,39 @@ def generate_ai_response_with_assistant(athlete_id, user_message):
         # Añadir mensaje del usuario
         if not openai_client or not hasattr(openai_client, 'beta'):
             return "❌ OpenAI client no configurado correctamente"
-            
-        openai_client.beta.threads.messages.create(
-            thread_id=thread_id,
-            role="user",
-            content=prompt
-        )
+        
+        # 🔧 NUEVA FUNCIONALIDAD: Detectar y subir archivos adjuntos
+        file_ids = []
+        if "[ARCHIVOS ADJUNTOS]" in user_message:
+            # Extraer y procesar archivos de la sesión de Streamlit si existen
+            attach_key = f"uploaded_files_{athlete_id}"
+            if attach_key in st.session_state and st.session_state[attach_key]:
+                for uploaded_file in st.session_state[attach_key]:
+                    try:
+                        # Subir archivo a OpenAI
+                        file_obj = openai_client.files.create(
+                            file=uploaded_file,
+                            purpose="assistants"
+                        )
+                        file_ids.append(file_obj.id)
+                        logging.info(f"✅ Archivo {uploaded_file.name} subido a OpenAI: {file_obj.id}")
+                    except Exception as e:
+                        logging.error(f"❌ Error subiendo archivo {uploaded_file.name}: {e}")
+        
+        # Crear mensaje con archivos si existen
+        message_data = {
+            "thread_id": thread_id,
+            "role": "user",
+            "content": prompt
+        }
+        
+        if file_ids:
+            message_data["attachments"] = [
+                {"file_id": file_id, "tools": [{"type": "code_interpreter"}]} 
+                for file_id in file_ids
+            ]
+        
+        openai_client.beta.threads.messages.create(**message_data)
         
         # Ejecutar assistant con timeout optimizado
         run = openai_client.beta.threads.runs.create(
@@ -388,6 +415,15 @@ def generate_ai_response_with_assistant(athlete_id, user_message):
                             response = response_cleaner.format_routine_response(response)
                         else:
                             response = response_cleaner.enhance_response_formatting(response)
+                    
+                    # 🗑️ NUEVO: Limpiar archivos de OpenAI después de procesarlos
+                    if file_ids:
+                        for file_id in file_ids:
+                            try:
+                                openai_client.files.delete(file_id)
+                                logging.info(f"🗑️ Archivo {file_id} eliminado de OpenAI")
+                            except Exception as e:
+                                logging.warning(f"⚠️ No se pudo eliminar archivo {file_id}: {e}")
                     
                     # 🎯 OPTIMIZACIÓN INTELIGENTE: Solo cortar si NO es rutina completa
                     # Verificar si era una solicitud de email (usando el contexto modificado)
