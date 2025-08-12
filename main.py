@@ -617,7 +617,7 @@ def show_athlete_management(athletes, user_id):
                 if st.form_submit_button("✅ Crear Atleta", use_container_width=True, type="primary"):
                     if name and sport and level:
                         result = safe_execute(
-                            lambda: add_athlete(name, sport, level, goals or "Sin objetivos específicos", email),
+                            lambda: add_athlete(user_id, name, sport, level, goals or "Sin objetivos específicos", email),
                             "Error al agregar atleta"
                         )
                         if result:
@@ -903,15 +903,8 @@ def show_chat_section(athletes):
         
         # Formulario del chat
         with st.form("chat_input_form", clear_on_submit=True, border=False):
-            # 3 columnas: adjuntar, input, enviar
-            col_attach, col_input, col_send = st.columns([0.5, 4.5, 1])
-            
-            with col_attach:
-                attach_clicked = st.form_submit_button(
-                    "📎",
-                    help="Adjuntar archivos",
-                    type="secondary"
-                )
+            # 3 columnas: input, enviar, adjuntar (REORDENADO)
+            col_input, col_send, col_attach = st.columns([4.5, 1, 0.5])
             
             with col_input:
                 # Placeholder dinámico según si hay archivos
@@ -928,6 +921,13 @@ def show_chat_section(athletes):
                     "🚀",
                     use_container_width=True,
                     type="primary"
+                )
+            
+            with col_attach:
+                attach_clicked = st.form_submit_button(
+                    "📎",
+                    help="Adjuntar archivos",
+                    type="secondary"
                 )
             
             # Manejar clic en adjuntar archivos
