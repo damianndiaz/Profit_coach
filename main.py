@@ -872,50 +872,148 @@ def show_chat_section(athletes):
                     if "[INICIO_NUEVA_RUTINA]" in ai_content:
                         ai_content_clean = ai_content.replace("[INICIO_NUEVA_RUTINA]", "").strip()
                         
-                        # 🎯 MEJORAR FORMATO DE RUTINA
-                        # Separar por líneas y mejorar el formato visual
+                        # � FORMATO MEJORADO Y CONSISTENTE DE RUTINAS
                         lines = ai_content_clean.split('\n')
                         formatted_content = []
+                        in_table = False
                         
                         for line in lines:
                             line = line.strip()
                             if not line:
+                                if not in_table:  # Solo agregar espacios fuera de tablas
+                                    formatted_content.append("<br>")
                                 continue
                             
-                            # Títulos principales
-                            if any(keyword in line.upper() for keyword in ['RUTINA', 'ENTRENAMIENTO', 'DÍA', 'SESIÓN']):
-                                if not any(char in line for char in [':', 'x', 'rep', 'min', 'seg']):  # No es ejercicio
-                                    formatted_content.append(f"<strong style='color:#2563EB; font-size:1.1em;'>{line}</strong>")
+                            # 🏆 TÍTULOS PRINCIPALES (RUTINA, ENTRENAMIENTO)
+                            if any(keyword in line.upper() for keyword in ['**📝 RUTINA:', '📋 RUTINA:', 'RUTINA:']):
+                                title = line.replace('**', '').replace('📝', '').replace('📋', '').strip()
+                                formatted_content.append(f"""
+                                <div style='background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); 
+                                     color: white; padding: 12px 20px; border-radius: 12px; margin: 10px 0;
+                                     text-align: center; font-size: 1.2em; font-weight: bold; box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3);'>
+                                    🏆 {title}
+                                </div>""")
+                                continue
+                            
+                            # ⏱️ INFORMACIÓN CLAVE (Duración, Objetivo, Nivel)
+                            if any(keyword in line for keyword in ['⏱️ Duración Total:', '🎯 Objetivo:', '📊 Nivel:']):
+                                formatted_content.append(f"""
+                                <div style='background: #F0F9FF; border-left: 4px solid #0EA5E9; 
+                                     padding: 8px 15px; margin: 5px 0; border-radius: 0 8px 8px 0;'>
+                                    <strong style='color: #0369A1;'>{line}</strong>
+                                </div>""")
+                                continue
+                            
+                            # 🔥 BLOQUES DE ENTRENAMIENTO (BLOQUE 1, 2, etc.)
+                            if any(keyword in line.upper() for keyword in ['### **BLOQUE', 'BLOQUE 1', 'BLOQUE 2', 'BLOQUE 3', 'BLOQUE 4', 'BLOQUE 5']) and ('min)' in line or 'MIN)' in line):
+                                block_name = line.replace('###', '').replace('**', '').strip()
+                                formatted_content.append(f"""
+                                <div style='background: linear-gradient(135deg, #059669 0%, #0D9488 100%); 
+                                     color: white; padding: 10px 16px; border-radius: 8px; margin: 15px 0 5px 0;
+                                     font-weight: bold; box-shadow: 0 2px 10px rgba(5, 150, 105, 0.2);'>
+                                    🔸 {block_name}
+                                </div>""")
+                                continue
+                            
+                            # 📋 TABLA DE EJERCICIOS
+                            if line.startswith('|------'):
+                                in_table = True
+                                continue  # Skip separator lines
+                            elif line.startswith('|') and '|' in line[1:]:
+                                if not in_table:
+                                    # Header de tabla
+                                    headers = [h.strip() for h in line.split('|')[1:-1]]
+                                    if len(headers) >= 3:  # Verificar que sea una tabla de ejercicios
+                                        formatted_content.append("""
+                                        <div style='background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; margin: 10px 0; overflow: hidden;'>
+                                        <table style='width: 100%; border-collapse: collapse;'>""")
+                                        
+                                        header_html = "<tr style='background: #64748B; color: white; font-weight: bold;'>"
+                                        for header in headers:
+                                            header_html += f"<td style='padding: 10px 12px; border: none; font-size: 0.85em;'>{header}</td>"
+                                        header_html += "</tr>"
+                                        formatted_content.append(header_html)
+                                        in_table = True
+                                        continue
+                                else:
+                                    # Row de datos
+                                    cells = [c.strip() for c in line.split('|')[1:-1]]
+                                    if len(cells) >= 3:
+                                        row_html = "<tr style='border-bottom: 1px solid #E2E8F0;'>"
+                                        for i, cell in enumerate(cells):
+                                            if i == 0:  # Nombre del ejercicio
+                                                row_html += f"<td style='padding: 10px 12px; font-weight: 600; color: #1E293B;'>{cell}</td>"
+                                            elif 'x' in cell or 'rep' in cell.lower():  # Series/Reps
+                                                highlighted_cell = re.sub(r'(\d+)\s*x\s*(\d+)', r'<span style="background:#DBEAFE; padding:2px 6px; border-radius:4px; font-weight:bold;">\1×\2</span>', cell)
+                                                row_html += f"<td style='padding: 10px 12px; text-align: center;'>{highlighted_cell}</td>"
+                                            elif any(time_word in cell.lower() for time_word in ['min', 'seg', 'segundo']):  # Tiempo
+                                                highlighted_cell = re.sub(r'(\d+)\s*(min|seg)', r'<span style="background:#FEF3C7; padding:2px 6px; border-radius:4px; font-weight:bold;">\1\2</span>', cell)
+                                                row_html += f"<td style='padding: 10px 12px; text-align: center;'>{highlighted_cell}</td>"
+                                            else:
+                                                row_html += f"<td style='padding: 10px 12px; color: #64748B;'>{cell}</td>"
+                                        row_html += "</tr>"
+                                        formatted_content.append(row_html)
+                                        continue
+                            else:
+                                if in_table:
+                                    formatted_content.append("</table></div>")
+                                    in_table = False
+                            
+                            # 📋 NOTAS TÉCNICAS
+                            if line.startswith('**📋 NOTAS TÉCNICAS'):
+                                formatted_content.append(f"""
+                                <div style='background: #FEF7CD; border: 1px solid #F59E0B; border-radius: 8px; 
+                                     padding: 12px 16px; margin: 15px 0;'>
+                                    <strong style='color: #92400E; font-size: 1.05em;'>📋 NOTAS TÉCNICAS IMPORTANTES</strong>
+                                </div>""")
+                                continue
+                            
+                            # 💡 NOTAS ESPECÍFICAS (Respiración, Técnica, etc.)
+                            if line.startswith('- **') and any(keyword in line for keyword in ['Respiración:', 'Técnica:', 'Progresión:', 'Adaptaciones:']):
+                                note_content = line.replace('- **', '').replace('**', '')
+                                parts = note_content.split(':', 1)
+                                if len(parts) == 2:
+                                    note_title, note_desc = parts
+                                    formatted_content.append(f"""
+                                    <div style='margin: 8px 0 8px 15px; padding: 8px 12px; background: #F0FDF4; 
+                                         border-left: 3px solid #22C55E; border-radius: 0 6px 6px 0;'>
+                                        <strong style='color: #15803D;'>💡 {note_title.strip()}:</strong> 
+                                        <span style='color: #374151;'>{note_desc.strip()}</span>
+                                    </div>""")
                                     continue
                             
-                            # Bloques de entrenamiento
-                            if any(keyword in line.upper() for keyword in ['BLOQUE', 'FASE', 'PARTE']):
-                                formatted_content.append(f"<strong style='color:#059669; font-size:1.05em;'>🔸 {line}</strong>")
+                            # ⏱️ TIEMPO ESTIMADO TOTAL
+                            if '⏱️ Tiempo estimado total:' in line:
+                                time_info = line.replace('⏱️ Tiempo estimado total:', '').strip()
+                                formatted_content.append(f"""
+                                <div style='background: #EDE9FE; border: 1px solid #8B5CF6; border-radius: 8px; 
+                                     padding: 10px 15px; margin: 15px 0; text-align: center;'>
+                                    <strong style='color: #6D28D9; font-size: 1.1em;'>⏱️ Tiempo Total: {time_info}</strong>
+                                </div>""")
                                 continue
                             
-                            # Ejercicios (contienen repeticiones, series, etc.)
-                            if any(pattern in line.lower() for pattern in ['x', 'rep', 'serie', 'min', 'seg', '⏱️', '🔄']):
-                                # Mejorar formato de ejercicios
-                                exercise_line = line
-                                # Resaltar números de series/reps
-                                exercise_line = re.sub(r'(\d+)\s*x\s*(\d+)', r'<span style="background:#E3F2FD; padding:2px 6px; border-radius:4px; font-weight:bold;">\1 x \2</span>', exercise_line)
-                                # Resaltar tiempos
-                                exercise_line = re.sub(r'(\d+)\s*(min|seg|segundos|minutos)', r'<span style="background:#FFF3E0; padding:2px 6px; border-radius:4px; font-weight:bold;">\1 \2</span>', exercise_line)
-                                formatted_content.append(f"  • {exercise_line}")
-                                continue
-                            
-                            # Línea normal
-                            formatted_content.append(line)
+                            # 🎯 LÍNEAS NORMALES CON FORMATO MEJORADO
+                            if line.startswith('**') and line.endswith('**'):
+                                clean_line = line.replace('**', '')
+                                formatted_content.append(f"<strong style='color: #1F2937; font-size: 1.05em;'>{clean_line}</strong>")
+                            elif line.startswith('- '):
+                                formatted_content.append(f"<div style='margin: 4px 0 4px 15px; color: #4B5563;'>• {line[2:]}</div>")
+                            else:
+                                formatted_content.append(f"<div style='color: #374151; line-height: 1.5;'>{line}</div>")
                         
-                        formatted_html = '<br>'.join(formatted_content)
+                        # Cerrar tabla si quedó abierta
+                        if in_table:
+                            formatted_content.append("</table></div>")
+                        
+                        formatted_html = ''.join(formatted_content)
                         
                         st.markdown(f"""
                         <div style='display:flex; justify-content:flex-start; margin-bottom:16px;'>
-                            <div class='chat-ai' style='max-width: 90%;'>
-                                <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 8px 12px; border-radius: 8px 8px 0 0; font-weight: bold;'>
-                                    🤖 ProFit Coach AI - Nueva Rutina Generada 💪
+                            <div class='chat-ai' style='max-width: 95%; background: white; border: 1px solid #E5E7EB; border-radius: 12px; box-shadow: 0 4px 25px rgba(0,0,0,0.1);'>
+                                <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 20px; border-radius: 12px 12px 0 0; font-weight: bold; text-align: center;'>
+                                    🤖 ProFit Coach AI - ✨ Nueva Rutina Generada ✨
                                 </div>
-                                <div style='background: #f8f9fa; padding: 16px; border-radius: 0 0 8px 8px; border: 1px solid #e9ecef; line-height: 1.6;'>
+                                <div style='padding: 20px; line-height: 1.6; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;'>
                                     {formatted_html}
                                 </div>
                             </div>

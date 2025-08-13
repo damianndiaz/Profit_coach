@@ -1,8 +1,21 @@
 
 #!/usr/bin/env python3
 """
-ProFit Coach - Chat Interface con OpenAI v1.0+ compatibility
-Versión optimizada para mejor rendimiento y cache inteligente
+ProFit Coach - Chat Interface con OpenAI v1.0+ compatibility# C# Conf# Configuración de rendimiento optimizada
+OPENAI_TIMEOUT = 90  # 🔧 AUMENTADO: Más tiempo para rutinas completas
+POLL_INTERVAL = 2    # 🔧 OPTIMIZADO: Polling menos agresivo para evitar rate limits  
+MAX_RESPONSE_LENGTH = 40000  # 🔧 AUMENTADO SIGNIFICATIVAMENTE: Permite rutinas muy completas sin cortes
+MAX_ROUTINE_LENGTH = 50000   # 🔧 NUEVO: Límite específico para rutinas generadas_INTERVAL = 2    # 🔧 OPTIMIZADO: Polling menos agresivo para evitar rate limits  
+MAX_RESPONSE_LENGTH = 40000  # 🔧 AUMENTADO SIGNIFICATIVAMENTE: Permite rutinas muy completas sin cortes
+MAX_ROUTINE_LENGTH = 50000   # 🔧 NUEVO: Límite específico para rutinas generadasuración de rendimiento optimizada
+OPENAI_TIMEOUT = 90  # 🔧 AUMENTADO: Más tiempo para rutinas completas
+POLL_INTERVAL = 2    # 🔧 OPTIMIZADO: Polling menos agresivo para evitar rate limits  
+MAX_RESPONSE_LENGTH = 40000  # 🔧 AUMENTADO SIGNIFICATIVAMENTE: Permite rutinas muy completas sin cortes
+MAX_ROUTINE_LENGTH = 50000   # 🔧 NUEVO: Límite específico para rutinas generadasguración de rendimiento optimizada
+OPENAI_TIMEOUT = 90  # 🔧 AUMENTADO: Más tiempo para rutinas completas
+POLL_INTERVAL = 2    # 🔧 OPTIMIZADO: Polling menos agresivo para evitar rate limits  
+MAX_RESPONSE_LENGTH = 40000  # 🔧 AUMENTADO SIGNIFICATIVAMENTE: Permite rutinas muy completas sin cortes
+MAX_ROUTINE_LENGTH = 50000   # 🔧 NUEVO: Límite específico para rutinas generadasrsión optimizada para mejor rendimiento y cache inteligente
 """
 
 import os
@@ -425,22 +438,31 @@ def generate_ai_response_with_assistant(athlete_id, user_message):
                             except Exception as e:
                                 logging.warning(f"⚠️ No se pudo eliminar archivo {file_id}: {e}")
                     
-                    # 🎯 OPTIMIZACIÓN INTELIGENTE: Menos restrictivo para respuestas
+                    # 🎯 MANEJO INTELIGENTE DE LONGITUD SIN CORTAR RUTINAS
                     # Verificar si era una solicitud de email (usando el contexto modificado)
                     is_email_request = "El usuario solicita que la rutina se envíe por email" in prompt
-                    is_routine_response = any(keyword in response.lower() for keyword in [
+                    is_routine_response = "[INICIO_NUEVA_RUTINA]" in response or any(keyword in response.lower() for keyword in [
                         'día 1', 'día 2', 'sesión 1', 'sesión 2', 'bloque', 'calentamiento', 
                         'entrenamiento', 'ejercicio', 'series', 'repeticiones'
                     ])
                     
-                    # 🔧 CORREGIDO: Límites más generosos para evitar cortes innecesarios
-                    if not is_routine_response and not is_email_request:
-                        # Para respuestas generales, permitir más contenido
-                        max_length = int(MAX_RESPONSE_LENGTH * 0.8)  # 80% del límite máximo (20,000 chars)
+                    # 🏋️‍♂️ LÍMITES MÁS GENEROSOS PARA EVITAR CORTES
+                    if "[INICIO_NUEVA_RUTINA]" in response:
+                        # Es una rutina generada: usar límite extendido
+                        if len(response) > MAX_ROUTINE_LENGTH:
+                            response = response[:MAX_ROUTINE_LENGTH-200] + "\n\n📋 *Rutina muy extensa - optimizada para mejor visualización. Si necesitas ejercicios adicionales, pregúntame específicamente.*"
+                            logging.warning(f"🔄 Rutina muy larga cortada: {len(response)} -> {MAX_ROUTINE_LENGTH} chars")
+                        else:
+                            logging.info(f"✅ Rutina completa procesada: {len(response)} chars")
+                    elif not is_routine_response and not is_email_request:
+                        # Para respuestas generales: límites estándar pero más generosos
+                        max_length = int(MAX_RESPONSE_LENGTH * 0.9)  # 90% del límite máximo
                         if len(response) > max_length:
-                            response = response[:max_length-100] + "\\n\\n⚡ *Respuesta resumida para mejor legibilidad. Pregunta por detalles específicos.*"
-                    elif len(response) > MAX_RESPONSE_LENGTH * 2:  # Solo cortar rutinas MUY largas
-                        response = response[:MAX_RESPONSE_LENGTH * 2-150] + "\\n\\n📋 *Rutina optimizada. Solicita secciones específicas si necesitas más detalle.*"
+                            response = response[:max_length-100] + "\n\n⚡ *Respuesta resumida para mejor legibilidad. Pregunta por detalles específicos.*"
+                    elif len(response) > MAX_RESPONSE_LENGTH * 2:
+                        # Solo cortar contenido de entrenamiento EXTREMADAMENTE largo
+                        response = response[:MAX_RESPONSE_LENGTH * 2-150] + "\n\n📋 *Rutina optimizada. Solicita secciones específicas si necesitas más detalle.*"
+                        logging.warning(f"🔄 Contenido muy largo cortado: {len(response)} chars")
                     
                     # Estimar tokens usados
                     estimated_tokens_used = (len(prompt) + len(response)) // 4  # Aproximación
