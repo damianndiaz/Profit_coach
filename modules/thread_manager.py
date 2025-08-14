@@ -88,6 +88,7 @@ class ThreadManager:
     
     def should_rotate_thread(self, athlete_id: int) -> Tuple[bool, str]:
         """Determina si el thread necesita rotación"""
+        conn = None
         try:
             # 🔧 PROTECCIÓN: Verificar si SQLite está disponible
             if not self.db_path:
@@ -105,6 +106,7 @@ class ThreadManager:
             
             result = cursor.fetchone()
             conn.close()
+            conn = None  # Marcar como cerrada
             
             if not result:
                 return False, "No hay thread activo"
@@ -132,10 +134,18 @@ class ThreadManager:
             
         except Exception as e:
             logging.error(f"❌ Error checking thread rotation: {e}")
-            return True, f"Error verificando thread: {e}"
+            # Cerrar conexión de forma segura en caso de error
+            if conn:
+                try:
+                    conn.close()
+                except Exception as close_error:
+                    logging.warning(f"⚠️ Error cerrando conexión en should_rotate_thread: {close_error}")
+            # Retornar False para no bloquear el sistema cuando SQLite falla
+            return False, f"Error SQLite, usando thread existente: {e}"
     
     def rotate_thread(self, athlete_id: int, reason: str, openai_create_thread_func) -> str:
         """Rota el thread de un atleta creando uno nuevo"""
+        conn = None
         try:
             # 🔧 PROTECCIÓN: Solo usar SQLite si está disponible
             if self.db_path:
@@ -151,42 +161,36 @@ class ThreadManager:
                 ''', (reason, athlete_id))
                 
                 conn.commit()
-                conn.close()
-            else:
-                logging.warning("⚠️ SQLite no disponible - rotación simplificada")
             
-            # 2. Crear nuevo thread en OpenAI
-            thread = openai_create_thread_func()
-            new_thread_id = thread.id
+            # 2. Crear nuevo thread usando OpenAI
+            new_thread = openai_create_thread_func()
+            new_thread_id = new_thread.id
             
-            # 3. Actualizar en athlete_threads (tabla principal PostgreSQL)
-            try:
-                with get_db_cursor() as pg_cursor:
-                    pg_cursor.execute(
-                        "UPDATE athlete_threads SET thread_id = %s, created_at = CURRENT_TIMESTAMP WHERE athlete_id = %s",
-                        (new_thread_id, athlete_id)
-                    )
-                logging.info(f"✅ Thread actualizado en PostgreSQL para atleta {athlete_id}")
-            except Exception as pg_error:
-                logging.error(f"❌ Error actualizando PostgreSQL: {pg_error}")
-                # Continuar con SQLite aunque PostgreSQL falle
-            
-            # 4. Registrar nuevo thread en monitoreo SQLite si está disponible
-            if self.db_path:
-                conn = sqlite3.connect(self.db_path, timeout=10.0)
-                cursor = conn.cursor()
-                
+            # 3. Registrar nuevo thread en ambas bases de datos
+            if self.db_path and conn:
                 cursor.execute('''
                     INSERT INTO thread_monitoring 
-                    (athlete_id, thread_id, estimated_tokens, message_count, created_at, last_used)
-                    VALUES (?, ?, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    (athlete_id, thread_id, estimated_tokens, message_count, created_at, last_used, is_active)
+                    VALUES (?, ?, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, TRUE)
                 ''', (athlete_id, new_thread_id))
                 
                 conn.commit()
-                conn.close()
             
-            conn.commit()
-            conn.close()
+            # 4. Actualizar en PostgreSQL (sistema principal)
+            try:
+                with get_db_cursor() as cursor:
+                    cursor.execute(
+                        "UPDATE athletes SET thread_id = %s WHERE id = %s",
+                        (new_thread_id, athlete_id)
+                    )
+                    logging.info(f"🔄 Thread actualizado en PostgreSQL para atleta {athlete_id}")
+            except Exception as pg_error:
+                logging.warning(f"⚠️ Error actualizando PostgreSQL: {pg_error}")
+                # Continuar aunque PostgreSQL falle
+            
+            # 5. Cerrar conexión SQLite de forma segura
+            if conn:
+                conn.close()
             
             logging.info(f"🔄 Thread rotado para atleta {athlete_id}: {reason}")
             logging.info(f"🆕 Nuevo thread: {new_thread_id}")
@@ -195,12 +199,21 @@ class ThreadManager:
             
         except Exception as e:
             logging.error(f"❌ Error rotating thread: {e}")
-            # Cerrar conexión en caso de error
+            # Cerrar conexión en caso de error de forma segura
+            if conn:
+                try:
+                    conn.close()
+                except Exception as close_error:
+                    logging.warning(f"⚠️ Error cerrando conexión SQLite: {close_error}")
+            # No hacer raise para no bloquear el flujo principal
+            # En su lugar, intentar obtener thread existente
             try:
-                conn.close()
-            except:
-                pass
-            raise
+                existing_thread_id = get_or_create_thread_id(athlete_id, openai_create_thread_func)
+                logging.info(f"🔄 Usando thread existente como fallback: {existing_thread_id}")
+                return existing_thread_id
+            except Exception as fallback_error:
+                logging.error(f"❌ Fallback también falló: {fallback_error}")
+                raise
     
     def get_or_create_smart_thread(self, athlete_id: int, openai_create_thread_func) -> str:
         """Obtiene thread existente o crea uno nuevo con lógica inteligente"""
@@ -227,6 +240,7 @@ class ThreadManager:
     
     def log_message_tokens(self, athlete_id: int, message: str, response: str = ""):
         """Registra tokens usados en un mensaje"""
+        conn = None
         try:
             # 🔧 PROTECCIÓN: Solo usar SQLite si está disponible
             if not self.db_path:
@@ -250,15 +264,23 @@ class ThreadManager:
             
             conn.commit()
             conn.close()
+            conn = None  # Marcar como cerrada
             
             logging.info(f"📊 Tokens registrados para atleta {athlete_id}: +{total_tokens}")
             
         except Exception as e:
             logging.error(f"❌ Error logging message tokens: {e}")
+            # Cerrar conexión de forma segura
+            if conn:
+                try:
+                    conn.close()
+                except Exception as close_error:
+                    logging.warning(f"⚠️ Error cerrando conexión en log_message_tokens: {close_error}")
             # No fallar la operación principal por esto
     
     def _ensure_thread_monitoring(self, athlete_id: int, thread_id: str):
         """Asegura que el thread esté en la tabla de monitoreo"""
+        conn = None
         try:
             # 🔧 PROTECCIÓN: Solo usar SQLite si está disponible
             if not self.db_path:
@@ -275,14 +297,22 @@ class ThreadManager:
             
             conn.commit()
             conn.close()
+            conn = None  # Marcar como cerrada
             
         except Exception as e:
             logging.error(f"❌ Error ensuring thread monitoring: {e}")
+            # Cerrar conexión de forma segura
+            if conn:
+                try:
+                    conn.close()
+                except Exception as close_error:
+                    logging.warning(f"⚠️ Error cerrando conexión en _ensure_thread_monitoring: {close_error}")
     
     def get_thread_stats(self, athlete_id: int) -> Dict[str, Any]:
         """Obtiene estadísticas del thread actual"""
+        conn = None
         try:
-            conn = sqlite3.connect(self.db_path)
+            conn = sqlite3.connect(self.db_path, timeout=10.0)
             cursor = conn.cursor()
             
             cursor.execute('''
@@ -293,6 +323,8 @@ class ThreadManager:
             ''', (athlete_id,))
             
             result = cursor.fetchone()
+            conn.close()
+            conn = None  # Marcar como cerrada
             
             if not result:
                 return {'status': 'No thread activo'}
@@ -306,8 +338,6 @@ class ThreadManager:
             # Tiempo desde creación
             created_dt = datetime.fromisoformat(created)
             age_hours = (datetime.now() - created_dt).total_seconds() / 3600
-            
-            conn.close()
             
             return {
                 'thread_id': thread_id,
@@ -325,6 +355,12 @@ class ThreadManager:
             
         except Exception as e:
             logging.error(f"❌ Error getting thread stats: {e}")
+            # Cerrar conexión de forma segura
+            if conn:
+                try:
+                    conn.close()
+                except Exception as close_error:
+                    logging.warning(f"⚠️ Error cerrando conexión en get_thread_stats: {close_error}")
             return {'status': 'error', 'error': str(e)}
     
     def get_all_threads_summary(self) -> Dict[str, Any]:

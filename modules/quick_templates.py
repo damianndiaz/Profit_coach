@@ -234,54 +234,26 @@ def generate_quick_routine_and_redirect(athlete_id, template):
             st.error("❌ No se pudieron obtener los datos del atleta")
             return
         
-        # 🎨 PROMPT MEJORADO CON FORMATO CONSISTENTE
-        personalized_prompt = f"""[INICIO_NUEVA_RUTINA]
+        # Personalizar el prompt con datos del atleta y formato mejorado
+        personalized_prompt = f"""Genera una rutina {template['name']} para {athlete_data['name']} ({athlete_data['sport']}, nivel {athlete_data['level']}).
 
-        **📋 {template['name'].upper()} - {athlete_data['name'].upper()}**
-        
-        **👤 PERFIL DEL ATLETA:**
-        - 🏅 Nombre: {athlete_data['name']}
-        - 🏃‍♂️ Deporte: {athlete_data['sport']}
-        - 📊 Nivel: {athlete_data['level']}
-        - 🎯 Objetivos: {athlete_data['goals']}
+{template['prompt']}
 
-        **⚡ INSTRUCCIONES ESPECÍFICAS:**
-        {template['prompt']}
+Formato requerido:
+📝 RUTINA: {template['name'].upper()}
 
-        **🎨 FORMATO OBLIGATORIO PARA CONSISTENCIA:**
-        Usa EXACTAMENTE esta estructura visual:
+🔥 BLOQUE 1 - [NOMBRE] (X min)
+• Ejercicio 1: X series x Y reps - Z seg descanso
+• Ejercicio 2: X series x Y reps - Z seg descanso
 
-        **📝 RUTINA: [NOMBRE EN MAYÚSCULAS]**
-        
-        **⏱️ Duración Total:** [X] minutos
-        **🎯 Objetivo:** [Objetivo específico]
-        **📊 Nivel:** {athlete_data['level']}
-        
-        **🔥 ESTRUCTURA DE ENTRENAMIENTO:**
-        
-        ### **BLOQUE 1 - [NOMBRE DEL BLOQUE]** *(X min)*
-        |------|------|------|------|------|
-        | Ejercicio | Series | Repeticiones/Tiempo | Descanso | Progresión Avanzada |
-        |------|------|------|------|------|
-        | [Nombre del ejercicio] | 3 | 10-12 rep | 30 seg | [Variante más difícil] |
-        
-        ### **BLOQUE 2 - [NOMBRE DEL BLOQUE]** *(X min)*
-        |------|------|------|------|------|
-        | Ejercicio | Series | Repeticiones/Tiempo | Descanso | Progresión Avanzada |
-        |------|------|------|------|------|
-        
-        **📋 NOTAS TÉCNICAS IMPORTANTES:**
-        - **Respiración:** [Instrucciones específicas]
-        - **Técnica:** [Puntos clave de ejecución]
-        - **Progresión:** [Cómo aumentar dificultad]
-        - **Adaptaciones:** [Para nivel {athlete_data['level']}]
+🔥 BLOQUE 2 - [NOMBRE] (X min) 
+• Ejercicio 1: X series x Y reps - Z seg descanso
+• Ejercicio 2: X series x Y reps - Z seg descanso
 
-        **⏱️ Tiempo estimado total:** [X-Y] min
-        
-        **💡 Notas para {athlete_data['sport']}:** [Adaptaciones específicas al deporte]
-        
-        PERSONALIZA todo para {athlete_data['sport']} nivel {athlete_data['level']}.
-        """
+(continúa con todos los bloques necesarios)
+
+⏱️ Tiempo total: X minutos
+💡 Notas específicas para {athlete_data['sport']}"""
         
         # Mostrar indicador de generación
         with st.spinner(f"🤖 Generando {template['name']} personalizada..."):
@@ -289,10 +261,10 @@ def generate_quick_routine_and_redirect(athlete_id, template):
             response = chat_interface.handle_user_message(athlete_id, personalized_prompt)
             
         if response:
-            # 🎉 ÉXITO: Mostrar confirmación
+            # Éxito: Mostrar confirmación
             st.success(f"✅ {template['name']} generada exitosamente!")
             
-            # 📊 GENERAR EXCEL AUTOMÁTICAMENTE
+            # Generar Excel automáticamente
             excel_success = False
             with st.spinner("📊 Generando archivo Excel automáticamente..."):
                 try:
@@ -302,7 +274,7 @@ def generate_quick_routine_and_redirect(athlete_id, template):
                         excel_success = True
                         st.success("📊 ¡Excel generado automáticamente!")
                         
-                        # 🎯 BOTÓN DE DESCARGA PROMINENTE CON ESTILO
+                        # Botón de descarga prominente
                         st.markdown("### 📊 **DESCARGAR RUTINA**")
                         
                         col1, col2, col3 = st.columns([1, 2, 1])
@@ -324,29 +296,22 @@ def generate_quick_routine_and_redirect(athlete_id, template):
             
             st.balloons()
             
-            # 📋 MENSAJE DE CONFIRMACIÓN MEJORADO
-            success_message = f"""
-            🎉 **¡Rutina generada exitosamente!**
+            # Mensaje de confirmación mejorado
+            success_message = f"""🎉 ¡Rutina generada exitosamente!
             
-            **📋 Detalles:**
-            - ✅ **Rutina:** {template['name']}
-            - ✅ **Personalizada para:** {athlete_data['sport']} - Nivel {athlete_data['level']}
-            - ✅ **Formato consistente:** Con estructura visual mejorada
-            """
+📋 Detalles:
+- ✅ Rutina: {template['name']}
+- ✅ Personalizada para: {athlete_data['sport']} - Nivel {athlete_data['level']}
+- ✅ Formato consistente: Con estructura visual mejorada"""
             
             if excel_success:
-                success_message += "\n- ✅ **Excel:** Listo para descargar arriba ⬆️"
+                success_message += "\n- ✅ Excel: Listo para descargar arriba ⬆️"
             
-            success_message += f"""
-            
-            **💬 Ver en el chat:** La rutina completa está en el chat del atleta con formato amigable.
-            
-            🔄 **Redirigiendo al chat en 5 segundos...**
-            """
+            success_message += "\n\n💬 Ver en el chat: La rutina completa está en el chat del atleta con formato amigable.\n\n🔄 Redirigiendo al chat en 5 segundos..."
             
             st.info(success_message)
             
-            # 🔄 REDIRECCIÓN AUTOMÁTICA AL CHAT (después de mostrar Excel)
+            # Redirección automática al chat
             time.sleep(5)
             st.session_state["show_quick_templates"] = None
             st.session_state["active_athlete_chat"] = athlete_id
@@ -358,82 +323,6 @@ def generate_quick_routine_and_redirect(athlete_id, template):
     except Exception as e:
         logging.error(f"Error generando rutina rápida: {e}")
         st.error(f"❌ Error al generar la rutina rápida: {e}")
-            
-            📋 **{template['name']}** para **{athlete_data['name']}**
-            🎯 Personalizada para **{athlete_data['sport']}** nivel **{athlete_data['level']}**
-            """)
-            
-            # Forzar actualización para mostrar el chat
-            time.sleep(1)  # Dar tiempo para que el usuario lea el mensaje
-            
-        else:
-            st.error("❌ Error al generar la rutina. Inténtalo de nuevo.")
-            
-    except Exception as e:
-        logging.error(f"Error generando rutina rápida: {e}")
-        st.error("❌ Error al generar la rutina rápida")
-
-def generate_quick_routine(athlete_id, template):
-    """Genera una rutina usando un template específico"""
-    try:
-        # Importar funciones localmente para evitar errores circulares
-        from modules import athlete_manager
-        from modules import chat_interface
-        
-        # Obtener datos del atleta para personalización
-        athlete_data = athlete_manager.get_athlete_data(athlete_id)
-        
-        if not athlete_data:
-            st.error("❌ No se pudieron obtener los datos del atleta")
-            return
-        
-        # Personalizar el prompt con datos del atleta
-        personalized_prompt = f"""
-        INFORMACIÓN DEL ATLETA:
-        - Nombre: {athlete_data['name']}
-        - Deporte: {athlete_data['sport']}
-        - Nivel: {athlete_data['level']}
-        - Objetivos: {athlete_data['goals']}
-        
-        TEMPLATE SOLICITADO: {template['name']}
-        
-        {template['prompt']}
-        
-        IMPORTANTE: 
-        - Adapta TODOS los ejercicios al deporte {athlete_data['sport']}
-        - Considera el nivel {athlete_data['level']} para la intensidad
-        - Incluye el marcador [INICIO_NUEVA_RUTINA] al inicio
-        - Formato claro y estructurado para Excel
-        - Que sea una rutina completa y lista para usar
-        """
-        
-        # Mostrar indicador de generación
-        with st.spinner(f"🤖 Generando {template['name']} personalizada..."):
-            # Usar el sistema de chat existente para generar
-            response = chat_interface.handle_user_message(athlete_id, personalized_prompt)
-            
-        if response:
-            st.success(f"✅ {template['name']} generada exitosamente!")
-            st.balloons()
-            
-            # Mostrar mensaje de confirmación
-            st.info(f"""
-            🎉 **Rutina generada:** {template['name']}
-            
-            📋 **Qué incluye:**
-            - {template['description']}
-            - Personalizada para {athlete_data['sport']}
-            - Adaptada al nivel {athlete_data['level']}
-            
-            💬 **Ver la rutina:** Ve al chat con el atleta para ver la rutina completa y descargarla.
-            """)
-            
-        else:
-            st.error("❌ Error al generar la rutina. Inténtalo de nuevo.")
-            
-    except Exception as e:
-        logging.error(f"Error generando rutina rápida: {e}")
-        st.error("❌ Error al generar la rutina rápida")
 
 def create_custom_template_form():
     """Permite crear templates personalizados (funcionalidad avanzada)"""

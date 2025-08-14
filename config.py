@@ -111,6 +111,22 @@ class Config:
     OPENAI_TIMEOUT = int(get_secret("OPENAI_TIMEOUT", "30", "app", silent=True) or "30")
     DB_TIMEOUT = int(get_secret("DB_TIMEOUT", "10", "app", silent=True) or "10")
     
+    # Token Management (Nuevas configuraciones)
+    MAX_TOKENS_PER_REQUEST = int(get_secret("MAX_TOKENS_PER_REQUEST", "8000", "openai", silent=True) or "8000")
+    MAX_CONTEXT_TOKENS = int(get_secret("MAX_CONTEXT_TOKENS", "12000", "openai", silent=True) or "12000")
+    TOKEN_BUFFER = int(get_secret("TOKEN_BUFFER", "1000", "openai", silent=True) or "1000")  # Buffer de seguridad
+    
+    # Manejar booleanos de forma segura
+    _enable_token_opt = get_secret("ENABLE_TOKEN_OPTIMIZATION", "true", "openai", silent=True)
+    ENABLE_TOKEN_OPTIMIZATION = _enable_token_opt if isinstance(_enable_token_opt, bool) else str(_enable_token_opt).lower() == "true"
+    
+    # Rate Limiting
+    _enable_rate_limiting = get_secret("ENABLE_RATE_LIMITING", "true", "openai", silent=True)
+    ENABLE_RATE_LIMITING = _enable_rate_limiting if isinstance(_enable_rate_limiting, bool) else str(_enable_rate_limiting).lower() == "true"
+    
+    DAILY_TOKEN_LIMIT = int(get_secret("DAILY_TOKEN_LIMIT", "1000000", "openai", silent=True) or "1000000")  # 1M tokens/día
+    HOURLY_TOKEN_LIMIT = int(get_secret("HOURLY_TOKEN_LIMIT", "50000", "openai", silent=True) or "50000")  # 50K tokens/hora
+    
     # Environment
     ENVIRONMENT = get_secret("ENVIRONMENT", "development", silent=True)
     

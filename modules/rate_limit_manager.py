@@ -14,7 +14,13 @@ class RateLimitManager:
     def __init__(self):
         # Configuración de límites (ajustar según tu plan de OpenAI)
         self.limits = {
-            # GPT-4 Turbo límites estándar (ajustar según tu tier)
+            # GPT-4o límites (modelo actual más eficiente)
+            'gpt-4o': {
+                'requests_per_minute': 500,
+                'tokens_per_minute': 30000,
+                'requests_per_day': 10000
+            },
+            # GPT-4 Turbo límites estándar 
             'gpt-4-turbo': {
                 'requests_per_minute': 500,
                 'tokens_per_minute': 30000,

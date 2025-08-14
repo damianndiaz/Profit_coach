@@ -43,14 +43,6 @@ from modules.chat_interface import handle_user_message, get_chat_history, detect
 from modules.routine_export import generate_routine_excel_from_chat, create_download_button
 from auth.database import test_db_connection, initialize_connection_pool
 
-# Importar Admin Dashboard
-try:
-    from modules.admin_dashboard import show_admin_interface
-    ADMIN_DASHBOARD_AVAILABLE = True
-except ImportError:
-    ADMIN_DASHBOARD_AVAILABLE = False
-    logging.warning("⚠️ Admin Dashboard no disponible")
-
 # Configuración de página
 st.set_page_config(
     page_title="ProFit Coach",
@@ -65,8 +57,7 @@ st.markdown("""
     .main-header {
         font-size: 2.5rem;
         font-weight: 700;
-        color: #0d47a1;
-        text-align: center;
+        color: #0d47a1;        text-align: center;
         margin-bottom: 2rem;
         letter-spacing: 1px;
     }
@@ -248,13 +239,6 @@ def show_app_status():
         if st.session_state.get("username"):
             st.markdown(f"**Usuario:** {st.session_state['username']}")
             
-            # Admin Dashboard (solo para usuarios autenticados)
-            if ADMIN_DASHBOARD_AVAILABLE:
-                st.markdown("---")
-                if st.button("🛠️ Admin Dashboard", key="admin_dashboard_btn", use_container_width=True, help="Panel de administración y monitoreo"):
-                    st.session_state['show_admin_dashboard'] = True
-                    st.rerun()
-            
             # Botón de logout mejorado
             if st.button("🚪 Cerrar Sesión", key="sidebar_logout", use_container_width=True):
                 st.session_state.clear()
@@ -277,13 +261,13 @@ def login_screen():
                     "👤 Usuario", 
                     placeholder="Tu nombre de usuario",
                     help="Ingresa tu nombre de usuario"
-                )
+                ) or ""
                 password = st.text_input(
                     "🔒 Contraseña", 
                     type="password",
                     placeholder="••••••••",
                     help="Ingresa tu contraseña"
-                )
+                ) or ""
                 
                 col_login, col_register = st.columns(2)
                 
@@ -351,16 +335,16 @@ def register_screen():
                 username = st.text_input(
                     "👤 Nombre de usuario",
                     help="Mínimo 3 caracteres, solo letras, números y guiones bajos"
-                )
+                ) or ""
                 password = st.text_input(
                     "🔒 Contraseña",
                     type="password",
                     help="Mínimo 6 caracteres, debe incluir letras y números"
-                )
+                ) or ""
                 confirm_password = st.text_input(
                     "🔒 Confirmar contraseña",
                     type="password"
-                )
+                ) or ""
                 
                 col_back, col_register = st.columns(2)
                 
@@ -412,13 +396,13 @@ def password_reset_screen():
             with st.form("password_reset_form", clear_on_submit=True):
                 st.markdown("### Actualizar contraseña")
                 
-                username = st.text_input("👤 Nombre de usuario")
+                username = st.text_input("👤 Nombre de usuario") or ""
                 new_password = st.text_input(
                     "🔒 Nueva contraseña", 
                     type="password",
                     help="Mínimo 6 caracteres, debe incluir letras y números"
-                )
-                confirm_password = st.text_input("🔒 Confirmar nueva contraseña", type="password")
+                ) or ""
+                confirm_password = st.text_input("🔒 Confirmar nueva contraseña", type="password") or ""
                 
                 col_back, col_reset = st.columns(2)
                 
@@ -617,16 +601,16 @@ def show_athlete_management(athletes, user_id):
                 
                 col1, col2 = st.columns(2)
                 with col1:
-                    name = st.text_input("👤 Nombre completo*")
-                    sport = st.text_input("🏃‍♂️ Deporte*")
+                    name = st.text_input("👤 Nombre completo*") or ""
+                    sport = st.text_input("🏃‍♂️ Deporte*") or ""
                 with col2:
                     level = st.selectbox(
                         "📊 Nivel*", 
                         ["Principiante", "Intermedio", "Avanzado", "Semi Profesional", "Élite"]
-                    )
-                    email = st.text_input("📧 Email")
+                    ) or "Intermedio"
+                    email = st.text_input("📧 Email") or ""
                 
-                goals = st.text_area("🎯 Objetivos", height=100)
+                goals = st.text_area("🎯 Objetivos", height=100) or ""
                 
                 if st.form_submit_button("✅ Crear Atleta", use_container_width=True, type="primary"):
                     if name and sport and level:
@@ -648,17 +632,17 @@ def show_athlete_management(athletes, user_id):
                     "👤 Seleccionar atleta", 
                     [a[1] for a in athletes],
                     help="Elige el atleta que deseas editar"
-                )
+                ) or (athletes[0][1] if athletes else "")
             
-            athlete_data = next(a for a in athletes if a[1] == selected_name)
+                athlete_data = next(a for a in athletes if a[1] == selected_name)
             
             with st.form("edit_athlete_form"):
                 st.markdown("### 📝 Información del atleta")
                 
                 col1, col2 = st.columns(2)
                 with col1:
-                    name = st.text_input("👤 Nombre completo", value=athlete_data[1])
-                    sport = st.text_input("🏃‍♂️ Deporte", value=athlete_data[2])
+                    name = st.text_input("👤 Nombre completo", value=athlete_data[1]) or ""
+                    sport = st.text_input("🏃‍♂️ Deporte", value=athlete_data[2]) or ""
                 with col2:
                     # Lista de niveles disponibles
                     available_levels = ["Principiante", "Intermedio", "Avanzado", "Semi Profesional", "Élite"]
@@ -675,10 +659,10 @@ def show_athlete_management(athletes, user_id):
                         "📊 Nivel", 
                         available_levels,
                         index=level_index
-                    )
-                    email = st.text_input("📧 Email", value=athlete_data[5] or "")
+                    ) or "Intermedio"
+                    email = st.text_input("📧 Email", value=athlete_data[5] or "") or ""
                 
-                goals = st.text_area("🎯 Objetivos", value=athlete_data[4] or "", height=100)
+                goals = st.text_area("🎯 Objetivos", value=athlete_data[4] or "", height=100) or ""
                 
                 col_save, col_delete = st.columns(2)
                 
@@ -1281,16 +1265,7 @@ def main():
         show_app_status()
         
         # Enrutamiento basado en estado
-        if st.session_state.get("show_admin_dashboard"):
-            # Mostrar Admin Dashboard
-            if ADMIN_DASHBOARD_AVAILABLE:
-                show_admin_interface()
-            else:
-                st.error("❌ Admin Dashboard no disponible")
-                if st.button("⬅️ Volver"):
-                    st.session_state.pop('show_admin_dashboard', None)
-                    st.rerun()
-        elif st.session_state.get("username"):
+        if st.session_state.get("username"):
             main_app(st.session_state["username"])
         elif st.session_state.get("show_register"):
             register_screen()

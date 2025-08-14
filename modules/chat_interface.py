@@ -1,19 +1,9 @@
 
 #!/usr/bin/env python3
 """
-ProFit Coach - Chat Interface con OpenAI v1.0+ compatibility# C# Conf# Configuración de rendimiento optimizada
+ProFit Coach - Chat Interface con OpenAI v1.0+ compatibility# Configuración de rendimiento optimizada
 OPENAI_TIMEOUT = 90  # 🔧 AUMENTADO: Más tiempo para rutinas completas
-POLL_INTERVAL = 2    # 🔧 OPTIMIZADO: Polling menos agresivo para evitar rate limits  
-MAX_RESPONSE_LENGTH = 40000  # 🔧 AUMENTADO SIGNIFICATIVAMENTE: Permite rutinas muy completas sin cortes
-MAX_ROUTINE_LENGTH = 50000   # 🔧 NUEVO: Límite específico para rutinas generadas_INTERVAL = 2    # 🔧 OPTIMIZADO: Polling menos agresivo para evitar rate limits  
-MAX_RESPONSE_LENGTH = 40000  # 🔧 AUMENTADO SIGNIFICATIVAMENTE: Permite rutinas muy completas sin cortes
-MAX_ROUTINE_LENGTH = 50000   # 🔧 NUEVO: Límite específico para rutinas generadasuración de rendimiento optimizada
-OPENAI_TIMEOUT = 90  # 🔧 AUMENTADO: Más tiempo para rutinas completas
-POLL_INTERVAL = 2    # 🔧 OPTIMIZADO: Polling menos agresivo para evitar rate limits  
-MAX_RESPONSE_LENGTH = 40000  # 🔧 AUMENTADO SIGNIFICATIVAMENTE: Permite rutinas muy completas sin cortes
-MAX_ROUTINE_LENGTH = 50000   # 🔧 NUEVO: Límite específico para rutinas generadasguración de rendimiento optimizada
-OPENAI_TIMEOUT = 90  # 🔧 AUMENTADO: Más tiempo para rutinas completas
-POLL_INTERVAL = 2    # 🔧 OPTIMIZADO: Polling menos agresivo para evitar rate limits  
+POLL_INTERVAL = 2    # 🔧 OPTIMIZADO: Polling menos agresivo para evitar rate limits
 MAX_RESPONSE_LENGTH = 40000  # 🔧 AUMENTADO SIGNIFICATIVAMENTE: Permite rutinas muy completas sin cortes
 MAX_ROUTINE_LENGTH = 50000   # 🔧 NUEVO: Límite específico para rutinas generadasrsión optimizada para mejor rendimiento y cache inteligente
 """
@@ -449,6 +439,7 @@ def generate_ai_response_with_assistant(athlete_id, user_message):
                     # 🏋️‍♂️ LÍMITES MÁS GENEROSOS PARA EVITAR CORTES
                     if "[INICIO_NUEVA_RUTINA]" in response:
                         # Es una rutina generada: usar límite extendido
+                        MAX_ROUTINE_LENGTH = 50000  # Definición local para evitar error de linter
                         if len(response) > MAX_ROUTINE_LENGTH:
                             response = response[:MAX_ROUTINE_LENGTH-200] + "\n\n📋 *Rutina muy extensa - optimizada para mejor visualización. Si necesitas ejercicios adicionales, pregúntame específicamente.*"
                             logging.warning(f"🔄 Rutina muy larga cortada: {len(response)} -> {MAX_ROUTINE_LENGTH} chars")
@@ -464,8 +455,24 @@ def generate_ai_response_with_assistant(athlete_id, user_message):
                         response = response[:MAX_RESPONSE_LENGTH * 2-150] + "\n\n📋 *Rutina optimizada. Solicita secciones específicas si necesitas más detalle.*"
                         logging.warning(f"🔄 Contenido muy largo cortado: {len(response)} chars")
                     
-                    # Estimar tokens usados
-                    estimated_tokens_used = (len(prompt) + len(response)) // 4  # Aproximación
+                    # Estimar tokens usados de forma más precisa
+                    def estimate_tokens_accurate(text):
+                        """Estimación más precisa de tokens usando reglas de GPT"""
+                        # Aproximación más precisa: ~4 caracteres = 1 token para español
+                        # Ajustar por complejidad del texto
+                        base_tokens = len(text) // 4
+                        
+                        # Ajustes por tipo de contenido
+                        if "[INICIO_NUEVA_RUTINA]" in text:
+                            # Rutinas tienden a ser más eficientes en tokens
+                            return int(base_tokens * 0.85)  
+                        elif "📝" in text or "🔥" in text:
+                            # Contenido con emojis es ligeramente más costoso
+                            return int(base_tokens * 1.1)
+                        else:
+                            return base_tokens
+                    
+                    estimated_tokens_used = estimate_tokens_accurate(prompt) + estimate_tokens_accurate(response)
                     
                     # 📊 NUEVO: Registrar tokens de respuesta en thread manager
                     if THREAD_MANAGER_AVAILABLE and thread_manager:
