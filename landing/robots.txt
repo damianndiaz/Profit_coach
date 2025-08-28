@@ -3,7 +3,7 @@ User-agent: *
 Allow: /
 
 # Sitemap
-Sitemap: https://tu-dominio.com/sitemap.xml
+Sitemap: https://profit-coach-landing.vercel.app/sitemap.xml
 
 # Block AI crawlers (optional - uncomment if needed)
 # User-agent: GPTBot
