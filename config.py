@@ -14,25 +14,37 @@ if not logging.getLogger().handlers:
         format='%(asctime)s - %(levelname)s - %(message)s'  # Formato con timestamp
     )
 
-# Detectar si estamos en Streamlit Cloud
-try:
-    import streamlit as st
-    IS_STREAMLIT_CLOUD = hasattr(st, 'secrets') and len(st.secrets) > 0
-    if IS_STREAMLIT_CLOUD:
-        logging.info(f"🔧 Entorno: Streamlit Cloud - {len(st.secrets)} secciones de secrets detectadas")
-        # Log de secciones disponibles (sin valores sensibles)
-        secret_sections = list(st.secrets.keys()) if hasattr(st.secrets, 'keys') else []
-        logging.info(f"🔑 Secciones de secrets disponibles: {secret_sections}")
-    else:
-        logging.info("🔧 Entorno: Local")
-except Exception as e:
-    IS_STREAMLIT_CLOUD = False
-    logging.warning(f"⚠️ Error detectando entorno: {e}")
+# Función para detectar entorno Streamlit Cloud de forma segura
+def detect_streamlit_environment():
+    """Detecta si estamos en Streamlit Cloud sin importar streamlit al inicio"""
+    try:
+        import streamlit as st
+        IS_STREAMLIT_CLOUD = hasattr(st, 'secrets') and len(st.secrets) > 0
+        if IS_STREAMLIT_CLOUD:
+            logging.info(f"🔧 Entorno: Streamlit Cloud - {len(st.secrets)} secciones de secrets detectadas")
+            # Log de secciones disponibles (sin valores sensibles)
+            secret_sections = list(st.secrets.keys()) if hasattr(st.secrets, 'keys') else []
+            logging.info(f"🔑 Secciones de secrets disponibles: {secret_sections}")
+        else:
+            logging.info("🔧 Entorno: Local")
+        return IS_STREAMLIT_CLOUD
+    except Exception as e:
+        logging.warning(f"⚠️ Error detectando entorno: {e}")
+        return False
+
+# Detectar entorno de forma lazy
+IS_STREAMLIT_CLOUD = None
 
 def get_secret(key, default="", section=None, silent=False):
     """Obtiene secretos de Streamlit Cloud o variables de entorno
     PRIORIDAD: Streamlit Secrets -> Variables de entorno -> Default
     """
+    global IS_STREAMLIT_CLOUD
+    
+    # Detectar entorno la primera vez que se llama
+    if IS_STREAMLIT_CLOUD is None:
+        IS_STREAMLIT_CLOUD = detect_streamlit_environment()
+    
     # Intentar primero desde Streamlit secrets
     if IS_STREAMLIT_CLOUD:
         try:

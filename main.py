@@ -10,6 +10,8 @@ import time
 import pandas as pd
 import io
 import re
+import sys
+from datetime import datetime
 
 # Configurar logging al inicio
 logging.basicConfig(
@@ -21,7 +23,8 @@ logging.basicConfig(
 )
 
 # Importar config después de configurar logging
-from config import config
+from config import Config
+config = Config()
 
 logging.info("🚀 Iniciando ProFit Coach...")
 # Ocultar información sensible en logs
@@ -41,7 +44,8 @@ from modules.athlete_manager import (
 from modules.chat_manager import create_chat_tables, create_thread_table
 from modules.chat_interface import handle_user_message, get_chat_history, detect_email_command, get_welcome_message
 from modules.routine_export import generate_routine_excel_from_chat, create_download_button
-from auth.database import test_db_connection, initialize_connection_pool
+from modules.email_manager import show_email_sending_interface
+from auth.database import test_db_connection, initialize_connection_pool, create_tables_if_not_exist
 
 # Configuración de página
 st.set_page_config(
@@ -200,10 +204,7 @@ def initialize_app():
         
         # Crear tablas (solo una vez)
         if not st.session_state.get("tables_created", False):
-            create_users_table()
-            create_athletes_table()
-            create_chat_tables()
-            create_thread_table()
+            create_tables_if_not_exist()
             st.session_state["tables_created"] = True
         
         # Gestionar estado de navegación
@@ -742,7 +743,7 @@ def show_quick_templates_section(athletes):
             st.markdown(f"## ⚡ Rutinas Rápidas para {athlete_name}")
             st.markdown("*Elige un template y se generará automáticamente en el chat*")
         with col2:
-            if st.button("⬅️ Volver", use_container_width=True):
+            if st.button("⬅️ Volver", key="back_from_templates", use_container_width=True):
                 st.session_state["show_quick_templates"] = None
                 st.rerun()
         
@@ -786,7 +787,7 @@ def show_chat_section(athletes):
         with col1:
             st.markdown(f"## 💬 Chat con {athlete_name}")
         with col2:
-            if st.button("⬅️ Volver", use_container_width=True):
+            if st.button("⬅️ Volver", key="back_from_chat", use_container_width=True):
                 st.session_state["active_athlete_chat"] = None
                 st.rerun()
         
@@ -850,7 +851,23 @@ def show_chat_section(athletes):
                     ai_content = msg.replace("🤖 ProFit Coach AI:", "").strip()
                     
                     # Generar ID único para este mensaje
-                    message_id = f"{athlete_id}_{idx}_{created_at.strftime('%Y%m%d_%H%M%S') if created_at else 'no_date'}"
+                    try:
+                        # Convertir created_at a datetime si es string
+                        if isinstance(created_at, str):
+                            # Intentar parsear el formato SQLite
+                            try:
+                                date_obj = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                                date_str = date_obj.strftime('%Y%m%d_%H%M%S')
+                            except:
+                                date_str = 'no_date'
+                        elif created_at:
+                            date_str = created_at.strftime('%Y%m%d_%H%M%S')
+                        else:
+                            date_str = 'no_date'
+                    except:
+                        date_str = 'no_date'
+                    
+                    message_id = f"{athlete_id}_{idx}_{date_str}"
                     
                     # Detectar si es una rutina
                     if "[INICIO_NUEVA_RUTINA]" in ai_content:
@@ -1007,15 +1024,46 @@ def show_chat_section(athletes):
                         # Generar botón de descarga para rutina
                         excel_data, athlete_name = generate_routine_excel_from_chat(athlete_id, msg)
                         if excel_data:
-                            col1, col2, col3 = st.columns([1, 2, 1])
-                            with col2:
+                            # Botones en una sola fila
+                            col1, col2, col3 = st.columns([1, 1, 1])
+                            
+                            with col1:
                                 create_download_button(excel_data, athlete_name, "Rutina_Entrenamiento", unique_id=message_id)
-                                st.markdown("""
-                                <div style='text-align:center; margin:10px 0; padding:10px; background:#e8f5e8; border-radius:8px; color:#2d5a2d; font-size:0.9em;'>
-                                    ✅ <strong>Rutina lista para descargar</strong><br>
-                                    📁 Incluye: Días de entrenamiento y ejercicios detallados en Excel
-                                </div>
-                                """, unsafe_allow_html=True)
+                            
+                            with col2:
+                                # Botón para enviar por email
+                                if st.button("📧 Enviar por Email", key=f"email_{message_id}", use_container_width=True):
+                                    # Obtener datos del atleta para el email
+                                    athlete_data = get_athlete_data(athlete_id)
+                                    
+                                    if athlete_data:
+                                        # Mostrar interfaz de envío de email
+                                        st.session_state[f"show_email_interface_{message_id}"] = True
+                                        st.rerun()
+                            
+                            with col3:
+                                # Espacio reservado para futuros botones
+                                st.write("")
+                            
+                            # Mostrar interfaz de email si se solicitó
+                            if st.session_state.get(f"show_email_interface_{message_id}", False):
+                                st.markdown("---")
+                                
+                                athlete_data = get_athlete_data(athlete_id)
+                                if athlete_data:
+                                    show_email_sending_interface(athlete_data, excel_data, f"Rutina_{athlete_name}_{datetime.now().strftime('%Y%m%d')}.xlsx")
+                                
+                                # Botón para cerrar la interfaz
+                                if st.button("❌ Cerrar", key=f"close_email_{message_id}"):
+                                    st.session_state[f"show_email_interface_{message_id}"] = False
+                                    st.rerun()
+                            
+                            st.markdown("""
+                            <div style='text-align:center; margin:10px 0; padding:10px; background:#e8f5e8; border-radius:8px; color:#2d5a2d; font-size:0.9em;'>
+                                ✅ <strong>Rutina lista para descargar y enviar</strong><br>
+                                📁 Incluye: Días de entrenamiento y ejercicios detallados en Excel
+                            </div>
+                            """, unsafe_allow_html=True)
                     else:
                         st.markdown(f"""
                         <div style='display:flex; justify-content:flex-start; margin-bottom:16px;'>

@@ -1,142 +1,181 @@
-import psycopg2
+"""
+Sistema de Base de Datos SQLite para ProFit Coach
+Versión optimizada y más rápida para desarrollo local
+"""
+
+import sqlite3
 import os
 import logging
-import time
-from dotenv import load_dotenv
-from psycopg2 import pool
 from contextlib import contextmanager
-from urllib.parse import urlparse
-from config import config
 
-load_dotenv()
-
-# Pool de conexiones para mejor rendimiento
-connection_pool = None
-
-def get_db_params():
-    """Obtiene parámetros de conexión desde URL o variables individuales"""
-    logging.info("🔍 Obteniendo parámetros de base de datos...")
-    
-    # Prioritizar DATABASE_URL si está disponible
-    if config.DATABASE_URL:
-        logging.info("✅ Usando DATABASE_URL para conexión")
-        parsed = urlparse(config.DATABASE_URL)
-        params = {
-            'host': parsed.hostname,
-            'port': parsed.port or 5432,
-            'dbname': parsed.path[1:],  # Remove leading '/'
-            'user': parsed.username,
-            'password': parsed.password,
-            'sslmode': config.DB_SSL_MODE
-        }
-        # Ocultar host completo en logs por seguridad
-        masked_host = parsed.hostname[:10] + "***" if parsed.hostname and len(parsed.hostname) > 10 else "***"
-        logging.info(f"🔗 Conectando a: {masked_host}:{parsed.port or 5432}")
-        return params
-    else:
-        # Usar variables individuales
-        logging.info("📋 Usando parámetros individuales para conexión")
-        params = {
-            'host': config.DB_HOST,
-            'port': int(config.DB_PORT),
-            'dbname': config.DB_NAME,
-            'user': config.DB_USER,
-            'password': config.DB_PASSWORD,
-            'sslmode': config.DB_SSL_MODE
-        }
-        # Ocultar host completo en logs por seguridad
-        masked_host = config.DB_HOST[:10] + "***" if config.DB_HOST and len(config.DB_HOST) > 10 else "***"
-        logging.info(f"🔗 Conectando a: {masked_host}:{config.DB_PORT}")
-        return params
+# Ruta de la base de datos SQLite
+DB_PATH = "/workspaces/ProFit Coach/profit_coach.db"
 
 def initialize_connection_pool():
-    """Inicializa el pool de conexiones"""
-    global connection_pool
-    try:
-        db_params = get_db_params()
-        connection_pool = psycopg2.pool.ThreadedConnectionPool(
-            1, 20,  # min y max conexiones
-            **db_params
-        )
-        logging.info("Pool de conexiones inicializado correctamente")
-    except Exception as e:
-        logging.error(f"Error al inicializar pool de conexiones: {e}")
-        raise
-
-def get_db_connection(max_retries=3, retry_delay=1.0):
-    """
-    Obtiene una conexión de la base de datos con reintentos automáticos
-    """
-    global connection_pool
-    
-    if connection_pool is None:
-        initialize_connection_pool()
-    
-    last_exception = None
-    for attempt in range(max_retries):
-        try:
-            if connection_pool:
-                conn = connection_pool.getconn()
-                if conn:
-                    return conn
-            
-            # Fallback: conexión directa
-            db_params = get_db_params()
-            return psycopg2.connect(**db_params)
-            
-        except Exception as e:
-            last_exception = e
-            if attempt < max_retries - 1:
-                logging.warning(f"Intento {attempt + 1} de conexión falló: {e}")
-                time.sleep(retry_delay)
-            else:
-                logging.error(f"Todos los intentos de conexión fallaron: {e}")
-    
-    raise last_exception
-
-def release_db_connection(conn):
-    """Libera una conexión al pool"""
-    global connection_pool
-    try:
-        if connection_pool and conn:
-            connection_pool.putconn(conn)
-        else:
-            if conn:
-                conn.close()
-    except Exception as e:
-        logging.error(f"Error al liberar conexión: {e}")
+    """Inicializar SQLite - no necesita pool de conexiones"""
+    logging.info("✅ SQLite inicializado correctamente")
+    return True
 
 @contextmanager
-def get_db_cursor():
-    """
-    Context manager para manejo seguro de conexiones y cursores
-    """
+def get_db_connection():
+    """Context manager para conexiones SQLite"""
     conn = None
-    cursor = None
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        yield cursor
-        conn.commit()
+        conn = sqlite3.connect(DB_PATH, timeout=30.0)
+        conn.row_factory = sqlite3.Row  # Para acceder por nombre de columna
+        conn.execute("PRAGMA foreign_keys = ON")  # Habilitar foreign keys
+        yield conn
     except Exception as e:
         if conn:
             conn.rollback()
-        logging.error(f"Error en operación de base de datos: {e}")
+        logging.error(f"❌ Error en conexión SQLite: {e}")
         raise
     finally:
-        if cursor:
-            cursor.close()
         if conn:
-            release_db_connection(conn)
+            conn.close()
 
 def test_db_connection():
-    """Prueba la conexión a la base de datos"""
-    logging.info("� Probando conexión con PostgreSQL...")
+    """Prueba la conexión a la base de datos SQLite"""
     try:
-        with get_db_cursor() as cursor:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
             cursor.execute("SELECT 1")
             result = cursor.fetchone()
-            return result[0] == 1
+            if result:
+                logging.info("✅ Conexión SQLite exitosa")
+                return True
+            else:
+                logging.error("❌ Conexión SQLite falló - no hay resultado")
+                return False
     except Exception as e:
-        logging.error(f"Prueba de conexión falló: {e}")
+        logging.error(f"❌ Error conectando a SQLite: {e}")
         return False
+
+def execute_query(query, params=None, fetch=False):
+    """Ejecuta una consulta en SQLite"""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            
+            if fetch:
+                if fetch == 'one':
+                    result = cursor.fetchone()
+                    return dict(result) if result else None
+                elif fetch == 'all':
+                    results = cursor.fetchall()
+                    return [dict(row) for row in results]
+            else:
+                conn.commit()
+                return cursor.lastrowid
+                
+    except Exception as e:
+        logging.error(f"❌ Error ejecutando query: {e}")
+        logging.error(f"Query: {query}")
+        logging.error(f"Params: {params}")
+        raise
+
+def create_tables_if_not_exist():
+    """Crea todas las tablas necesarias si no existen"""
+    
+    # Tabla de usuarios
+    users_table = """
+    CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_login TIMESTAMP,
+        is_active BOOLEAN DEFAULT TRUE
+    )
+    """
+    
+    # Tabla de atletas
+    athletes_table = """
+    CREATE TABLE IF NOT EXISTS athletes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        sport TEXT NOT NULL,
+        level TEXT NOT NULL,
+        goals TEXT,
+        email TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_active BOOLEAN DEFAULT TRUE,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    )
+    """
+    
+    # Tabla de conversaciones
+    conversations_table = """
+    CREATE TABLE IF NOT EXISTS conversations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        athlete_id INTEGER NOT NULL,
+        thread_id TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (athlete_id) REFERENCES athletes (id) ON DELETE CASCADE
+    )
+    """
+    
+    # Tabla de mensajes
+    messages_table = """
+    CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id INTEGER NOT NULL,
+        content TEXT NOT NULL,
+        is_user BOOLEAN NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE
+    )
+    """
+    
+    # Tabla de threads
+    threads_table = """
+    CREATE TABLE IF NOT EXISTS threads (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        athlete_id INTEGER NOT NULL,
+        thread_id TEXT UNIQUE NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (athlete_id) REFERENCES athletes (id) ON DELETE CASCADE
+    )
+    """
+    
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Crear todas las tablas
+            cursor.execute(users_table)
+            cursor.execute(athletes_table)
+            cursor.execute(conversations_table)
+            cursor.execute(messages_table)
+            cursor.execute(threads_table)
+            
+            conn.commit()
+            logging.info("✅ Todas las tablas SQLite creadas correctamente")
+            
+    except Exception as e:
+        logging.error(f"❌ Error creando tablas SQLite: {e}")
+        raise
+
+def create_users_table():
+    """Wrapper para compatibilidad"""
+    create_tables_if_not_exist()
+
+def create_athletes_table():
+    """Wrapper para compatibilidad"""
+    pass
+
+def create_chat_tables():
+    """Wrapper para compatibilidad"""
+    pass
+
+def create_thread_table():
+    """Wrapper para compatibilidad"""
+    pass
